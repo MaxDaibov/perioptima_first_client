@@ -612,6 +612,16 @@ const EMPTY_TASK_DRAFT = {
   status: 'open',
 }
 
+const EMPTY_INTERACTION_DRAFT = {
+  clinic_id: '',
+  type: 'email',
+  date: '',
+  summary: '',
+  outcome: '',
+  next_step: '',
+  next_step_date: '',
+}
+
 const EMPTY_ASSET_DRAFT = {
   clinic_id: '',
   asset_type: 'outreach email',
@@ -1080,6 +1090,20 @@ function App() {
     })
   }
 
+  function openInteractionEditor(
+    mode,
+    interaction = null,
+    clinicId = selectedClinic?.id ?? clinics[0]?.id ?? '',
+  ) {
+    setEditor({
+      entity: 'interaction',
+      mode,
+      values: interaction
+        ? { ...interaction }
+        : { ...EMPTY_INTERACTION_DRAFT, clinic_id: clinicId, date: addDaysToToday(0) },
+    })
+  }
+
   function openContactEditor(mode, contact = null, clinicId = selectedClinic?.id ?? clinics[0]?.id ?? '') {
     setEditor({
       entity: 'contact',
@@ -1113,6 +1137,11 @@ function App() {
 
     if (editor.entity === 'contact') {
       saveContactEditor(editor.values, editor.mode)
+      return
+    }
+
+    if (editor.entity === 'interaction') {
+      saveInteractionEditor(editor.values, editor.mode)
       return
     }
 
@@ -1238,6 +1267,34 @@ function App() {
     notify(mode === 'edit' ? 'Contact updated' : 'Contact added')
   }
 
+  function saveInteractionEditor(values, mode) {
+    if (!values.summary.trim()) {
+      notify('Interaction summary is required')
+      return
+    }
+
+    const nextInteraction = {
+      ...values,
+      id: mode === 'edit' ? values.id : createLocalId('interaction'),
+      type: values.type.trim(),
+      date: values.date || addDaysToToday(0),
+      summary: values.summary.trim(),
+      outcome: values.outcome.trim(),
+      next_step: values.next_step.trim(),
+      next_step_date: values.next_step_date || '',
+    }
+
+    setInteractions((current) =>
+      mode === 'edit'
+        ? current.map((interaction) =>
+            interaction.id === nextInteraction.id ? nextInteraction : interaction,
+          )
+        : [nextInteraction, ...current],
+    )
+    closeEditor()
+    notify(mode === 'edit' ? 'Interaction updated' : 'Interaction added')
+  }
+
   function saveAssetEditor(values, mode) {
     if (!values.title.trim()) {
       notify('Asset title is required')
@@ -1359,6 +1416,13 @@ function App() {
   function deleteContact(contactId) {
     setContacts((current) => current.filter((contact) => contact.id !== contactId))
     notify('Contact removed')
+  }
+
+  function deleteInteraction(interactionId) {
+    setInteractions((current) =>
+      current.filter((interaction) => interaction.id !== interactionId),
+    )
+    notify('Interaction removed')
   }
 
   function deleteAsset(assetId) {
@@ -1639,20 +1703,49 @@ function App() {
                       <p className="eyebrow">Interactions</p>
                       <h3>Timeline</h3>
                     </div>
+                    <button
+                      className="ghost-button small"
+                      onClick={() => openInteractionEditor('create', null, selectedClinic.id)}
+                    >
+                      Add interaction
+                    </button>
                   </div>
                   <div className="timeline">
-                    {clinicInteractions.map((interaction) => (
-                      <article key={interaction.id} className="timeline-item">
-                        <div className="timeline-dot" />
-                        <div>
-                          <p className="eyebrow">
-                            {formatLabel(interaction.type)} • {formatDate(interaction.date)}
-                          </p>
-                          <h4>{interaction.summary}</h4>
-                          <p>{interaction.outcome}</p>
-                        </div>
-                      </article>
-                    ))}
+                    {clinicInteractions.length ? (
+                      clinicInteractions.map((interaction) => (
+                        <article key={interaction.id} className="timeline-item">
+                          <div className="timeline-dot" />
+                          <div className="timeline-content">
+                            <div className="inline-actions wrap">
+                              <p className="eyebrow">
+                                {formatLabel(interaction.type)} • {formatDate(interaction.date)}
+                              </p>
+                              <div className="inline-actions wrap">
+                                <button
+                                  className="ghost-button small"
+                                  onClick={() => openInteractionEditor('edit', interaction)}
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="ghost-button small danger"
+                                  onClick={() => deleteInteraction(interaction.id)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                            <h4>{interaction.summary}</h4>
+                            <p>{interaction.outcome || 'No outcome recorded yet.'}</p>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <EmptyState
+                        title="No interactions yet"
+                        body="Log outreach emails, calls, meetings, and LinkedIn touches so the clinic timeline becomes useful."
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -1676,7 +1769,7 @@ function App() {
                               Due {formatDate(task.due_date)} • {task.owner}
                             </p>
                           </div>
-                          <div className="inline-actions wrap">
+                          <div className="task-actions">
                             <button className="ghost-button small" onClick={() => openTaskEditor('edit', task)}>
                               Edit
                             </button>
@@ -1704,19 +1797,42 @@ function App() {
                       <p className="eyebrow">Assets</p>
                       <h3>Clinic materials</h3>
                     </div>
+                    <button
+                      className="ghost-button small"
+                      onClick={() => openAssetEditor('create', null, selectedClinic.id)}
+                    >
+                      Add asset
+                    </button>
                   </div>
                   <div className="stack-list">
-                    {clinicAssets.map((asset) => (
-                      <article key={asset.id} className="asset-snippet">
-                        <div>
-                          <h4>{asset.title}</h4>
-                          <p className="muted">
-                            {asset.asset_type} • {asset.status} • v{asset.version}
-                          </p>
-                        </div>
-                        <p>{asset.content}</p>
-                      </article>
-                    ))}
+                    {clinicAssets.length ? (
+                      clinicAssets.map((asset) => (
+                        <article key={asset.id} className="asset-snippet">
+                          <div>
+                            <h4>{asset.title}</h4>
+                            <p className="muted">
+                              {asset.asset_type} • {asset.status} • v{asset.version}
+                            </p>
+                          </div>
+                          <div className="stack-list">
+                            <p>{asset.content}</p>
+                            <div className="inline-actions wrap">
+                              <button className="ghost-button small" onClick={() => openAssetEditor('edit', asset)}>
+                                Edit
+                              </button>
+                              <button className="ghost-button small danger" onClick={() => deleteAsset(asset.id)}>
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <EmptyState
+                        title="No assets yet"
+                        body="Add outreach drafts, follow-ups, one-pagers, or meeting briefs directly from this clinic view."
+                      />
+                    )}
                   </div>
                 </div>
               </div>
@@ -2150,6 +2266,10 @@ function EditorModal({ editor, clinics, onChangeField, onClose, onSave }) {
           <ContactEditorFields values={editor.values} clinics={clinics} onChangeField={onChangeField} />
         ) : null}
 
+        {editor.entity === 'interaction' ? (
+          <InteractionEditorFields values={editor.values} clinics={clinics} onChangeField={onChangeField} />
+        ) : null}
+
         {editor.entity === 'asset' ? (
           <AssetEditorFields values={editor.values} clinics={clinics} onChangeField={onChangeField} />
         ) : null}
@@ -2389,6 +2509,64 @@ function ContactEditorFields({ values, clinics, onChangeField }) {
           className="editor-area compact"
           value={values.personalization_notes}
           onChange={(event) => onChangeField('personalization_notes', event.target.value)}
+        />
+      </label>
+    </div>
+  )
+}
+
+function InteractionEditorFields({ values, clinics, onChangeField }) {
+  return (
+    <div className="form-grid">
+      <label>
+        Clinic
+        <select className="text-input" value={values.clinic_id} onChange={(event) => onChangeField('clinic_id', event.target.value)}>
+          {clinics.map((clinic) => (
+            <option key={clinic.id} value={clinic.id}>
+              {clinic.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Type
+        <select className="text-input" value={values.type} onChange={(event) => onChangeField('type', event.target.value)}>
+          <option value="email">email</option>
+          <option value="call">call</option>
+          <option value="linkedin">linkedin</option>
+          <option value="meeting">meeting</option>
+        </select>
+      </label>
+      <label>
+        Date
+        <input className="text-input" type="date" value={values.date} onChange={(event) => onChangeField('date', event.target.value)} />
+      </label>
+      <label>
+        Next step date
+        <input className="text-input" type="date" value={values.next_step_date} onChange={(event) => onChangeField('next_step_date', event.target.value)} />
+      </label>
+      <label className="full-span">
+        Summary
+        <textarea
+          className="editor-area compact"
+          value={values.summary}
+          onChange={(event) => onChangeField('summary', event.target.value)}
+        />
+      </label>
+      <label className="full-span">
+        Outcome
+        <textarea
+          className="editor-area compact"
+          value={values.outcome}
+          onChange={(event) => onChangeField('outcome', event.target.value)}
+        />
+      </label>
+      <label className="full-span">
+        Next step
+        <textarea
+          className="editor-area compact"
+          value={values.next_step}
+          onChange={(event) => onChangeField('next_step', event.target.value)}
         />
       </label>
     </div>

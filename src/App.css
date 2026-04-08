@@ -539,6 +539,12 @@
   gap: 12px;
 }
 
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .timeline-dot {
   width: 10px;
   height: 10px;
@@ -689,10 +695,13 @@
   display: grid;
   place-items: center;
   padding: 20px;
+  overflow: auto;
 }
 
 .modal-card {
   width: min(760px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
   background: #fdf9f2;
   border: 1px solid rgba(23, 49, 59, 0.1);
   border-radius: 30px;
@@ -703,6 +712,14 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .form-grid {
