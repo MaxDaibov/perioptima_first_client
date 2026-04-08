@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/npiregistry/:path*",
+      "destination": "https://npiregistry.cms.hhs.gov/api/:path*"
+    }
+  ]
+}
