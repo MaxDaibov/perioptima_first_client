@@ -8,7 +8,7 @@ import { WorkflowResultsPreview } from './features/ai-workflows/components/Workf
 import { mapWorkflowClinicToClinicEntity } from './features/clinics/utils/mapWorkflowClinicToClinicEntity'
 import './App.css'
 
-const WORKSPACE_ITEMS = ['Clinics', 'Tasks', 'Assets', 'Docs', 'Sources', 'AI Workflows']
+const WORKSPACE_ITEMS = ['Clinics', 'Tasks', 'Assets', 'Docs', 'Sources', 'Research Workflows']
 const STAGES = [
   'lead',
   'researching',
@@ -2038,7 +2038,7 @@ function App() {
                 ) : (
                   <EmptyState
                     title="No docs yet"
-                    body="Add product context, outreach strategy, and prompt library notes here so the AI workspace has reusable inputs."
+                    body="Add product context, outreach strategy, and prompt library notes here so the research workflow area has reusable inputs."
                   />
                 )}
               </div>
@@ -2094,16 +2094,16 @@ function App() {
 
         {activeView === 'Sources' && (
           <section className="panel page-panel">
-            <div className="panel-header">
-              <div>
-                <p className="eyebrow">Research inputs</p>
-                <h3>Sources</h3>
-                <p className="muted">Enable the sources AI workflows can use for clinic discovery and verification.</p>
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">Research inputs</p>
+                  <h3>Sources</h3>
+                  <p className="muted">Enable the sources research workflows can use for clinic discovery and verification.</p>
+                </div>
+                <button className="primary-button" onClick={() => openSourceEditor('create')}>
+                  Add source
+                </button>
               </div>
-              <button className="primary-button" onClick={() => openSourceEditor('create')}>
-                Add source
-              </button>
-            </div>
             <div className="stack-list">
               {sources.map((source) => (
                 <article key={source.id} className="asset-snippet">
@@ -2141,13 +2141,13 @@ function App() {
           </section>
         )}
 
-        {activeView === 'AI Workflows' && (
+        {activeView === 'Research Workflows' && (
           <section className="workspace-layout assets-layout">
             <div className="panel">
               <div className="panel-header">
                 <div>
-                  <p className="eyebrow">Agent workbench</p>
-                  <h3>Controlled AI execution</h3>
+                  <p className="eyebrow">Research workbench</p>
+                  <h3>Controlled workflow execution</h3>
                 </div>
               </div>
               <RunWorkflowForm

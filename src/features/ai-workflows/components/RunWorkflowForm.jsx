@@ -89,7 +89,7 @@ export function RunWorkflowForm({ value, sources = [], onChange, onRun }) {
       </div>
       <div className="workflow-tip">
         <p className="eyebrow">Rule</p>
-        <p>{isFindClinics ? 'AI generates clinic candidates, then the user approves before save.' : 'Mock workflow placeholder. Preview-first behavior still applies.'}</p>
+        <p>{isFindClinics ? 'The workflow generates clinic candidates, then the user approves before save.' : 'Workflow placeholder. Preview-first behavior still applies.'}</p>
       </div>
       <button className="primary-button" onClick={onRun}>
         Run workflow
