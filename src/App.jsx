@@ -1006,7 +1006,7 @@ function App() {
     if (!preview.length) {
       notify(
         workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
-          ? 'No contacts found for this clinic'
+          ? 'No extractable website contacts found for this clinic yet'
           : 'No clinics found for these filters',
       )
       return

@@ -46,30 +46,34 @@ export function RunWorkflowForm({ value, sources = [], clinics = [], onChange, o
           </select>
         </label>
       ) : null}
-      <label>
-        Region
-        <input
-          className="text-input"
-          value={value.region}
-          onChange={(event) => onChange('region', event.target.value)}
-        />
-      </label>
-      <label>
-        Specialty
-        <input
-          className="text-input"
-          value={value.specialty}
-          onChange={(event) => onChange('specialty', event.target.value)}
-        />
-      </label>
-      <label>
-        Clinic type
-        <input
-          className="text-input"
-          value={value.clinicType}
-          onChange={(event) => onChange('clinicType', event.target.value)}
-        />
-      </label>
+      {!isFindContacts ? (
+        <>
+          <label>
+            Region
+            <input
+              className="text-input"
+              value={value.region}
+              onChange={(event) => onChange('region', event.target.value)}
+            />
+          </label>
+          <label>
+            Specialty
+            <input
+              className="text-input"
+              value={value.specialty}
+              onChange={(event) => onChange('specialty', event.target.value)}
+            />
+          </label>
+          <label>
+            Clinic type
+            <input
+              className="text-input"
+              value={value.clinicType}
+              onChange={(event) => onChange('clinicType', event.target.value)}
+            />
+          </label>
+        </>
+      ) : null}
       <label>
         Result limit
         <input

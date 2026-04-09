@@ -20,6 +20,30 @@ const PAGE_KEYWORDS = [
   'transplant',
 ]
 
+const COMMON_CONTACT_PATHS = [
+  '/leadership',
+  '/leaders',
+  '/about/leadership',
+  '/about-us/leadership',
+  '/about/team',
+  '/team',
+  '/staff',
+  '/contact',
+  '/contact-us',
+  '/directory',
+  '/providers',
+  '/find-a-doctor',
+  '/faculty',
+  '/departments',
+  '/department/surgery',
+  '/services/surgery',
+  '/surgery',
+  '/surgical-services',
+  '/cancer',
+  '/oncology',
+  '/transplant',
+]
+
 const TITLE_HINTS = [
   'chief',
   'director',
@@ -69,6 +93,7 @@ function scoreTitle(title) {
 
 async function fetchPage(url) {
   const response = await fetch(url, {
+    redirect: 'follow',
     headers: {
       'user-agent': 'PeriOptimaResearchBot/1.0',
       accept: 'text/html,application/xhtml+xml',
@@ -81,6 +106,13 @@ async function fetchPage(url) {
 
   const html = await response.text()
   return cheerio.load(html)
+}
+
+function buildFallbackPaths(baseUrl) {
+  return COMMON_CONTACT_PATHS.map((path) => ({
+    url: toAbsoluteUrl(baseUrl, path),
+    text: `guessed path ${path}`,
+  })).filter((item) => item.url)
 }
 
 function extractRelevantLinks($, baseUrl) {
@@ -183,6 +215,48 @@ function extractPeopleFromPage($, pageUrl, clinic) {
   return candidates
 }
 
+function extractPeopleFromHeadings($, pageUrl, clinic) {
+  const candidates = []
+
+  $('h1, h2, h3, h4, strong, b').each((_, node) => {
+    const heading = normalizeWhitespace($(node).text())
+    const matches = [...heading.matchAll(NAME_REGEX)].map((match) => match[1]).filter(Boolean)
+    if (!matches.length) return
+
+    const parentText = normalizeWhitespace($(node).parent().text())
+    const titleText = parentText
+      .replace(heading, '')
+      .split(/(?<=[.])\s+| \| | - | — /)
+      .map((line) => line.trim())
+      .find((line) => scoreTitle(line) > 0) ?? ''
+
+    if (!titleText) return
+
+    for (const name of matches.slice(0, 1)) {
+      const { influence, champion } = inferScores(titleText)
+      candidates.push({
+        clinic_id: clinic.id,
+        clinic_name: clinic.name,
+        full_name: name,
+        title: titleText,
+        department: inferDepartment(titleText, clinic),
+        email: '',
+        linkedin_url: '',
+        phone: '',
+        seniority: influence >= 9 ? 'executive' : 'director',
+        role_type: inferRoleType(titleText),
+        influence_score: influence,
+        champion_probability: champion,
+        contact_status: 'researching',
+        personalization_notes: `Extracted from ${pageUrl}. Candidate found via heading + nearby role text on the clinic website.`,
+        source: pageUrl,
+      })
+    }
+  })
+
+  return candidates
+}
+
 function dedupeCandidates(candidates) {
   const seen = new Set()
   return candidates.filter((candidate) => {
@@ -210,10 +284,20 @@ export default async function handler(request, response) {
     const homepageUrl = clinic.website
     const homepage = await fetchPage(homepageUrl)
     const relevantLinks = extractRelevantLinks(homepage, homepageUrl)
+    const fallbackLinks = buildFallbackPaths(homepageUrl)
+    const mergedLinks = new Map()
+    for (const link of [...relevantLinks, ...fallbackLinks]) {
+      if (!mergedLinks.has(link.url)) {
+        mergedLinks.set(link.url, link)
+      }
+    }
     const pagesToSearch = [
       { url: homepageUrl, label: 'homepage' },
-      ...relevantLinks.map((link) => ({ url: link.url, label: link.text || 'related page' })),
-    ].slice(0, 6)
+      ...Array.from(mergedLinks.values()).map((link) => ({
+        url: link.url,
+        label: link.text || 'related page',
+      })),
+    ].slice(0, 10)
 
     const candidates = []
     const searchedPages = []
@@ -223,6 +307,7 @@ export default async function handler(request, response) {
         const pageDom = page.url === homepageUrl ? homepage : await fetchPage(page.url)
         searchedPages.push(page)
         candidates.push(...extractPeopleFromPage(pageDom, page.url, clinic))
+        candidates.push(...extractPeopleFromHeadings(pageDom, page.url, clinic))
       } catch {
         searchedPages.push({ ...page, failed: true })
       }
