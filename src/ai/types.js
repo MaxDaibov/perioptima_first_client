@@ -57,6 +57,7 @@ export const INITIAL_FIND_CLINICS_FORM = {
   workflowType: WORKFLOW_TYPES.FIND_CLINICS_BY_REGION,
   instruction:
     'Find GI surgery, hepatobiliary, and surgical oncology programs in the western United States that could be credible early pilot partners.',
+  targetClinicId: '',
   region: 'West Coast',
   specialty: 'GI Surgery',
   clinicType: 'Academic medical center',

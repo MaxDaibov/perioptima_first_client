@@ -1,7 +1,8 @@
 import { WORKFLOW_TYPE_OPTIONS, WORKFLOW_TYPES } from '../../../ai/types'
 
-export function RunWorkflowForm({ value, sources = [], onChange, onRun }) {
+export function RunWorkflowForm({ value, sources = [], clinics = [], onChange, onRun }) {
   const isFindClinics = value.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION
+  const isFindContacts = value.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
   const enabledSources = sources.filter((source) => source.enabled)
 
   return (
@@ -28,6 +29,23 @@ export function RunWorkflowForm({ value, sources = [], onChange, onRun }) {
           onChange={(event) => onChange('instruction', event.target.value)}
         />
       </label>
+      {isFindContacts ? (
+        <label>
+          Target clinic
+          <select
+            className="text-input"
+            value={value.targetClinicId}
+            onChange={(event) => onChange('targetClinicId', event.target.value)}
+          >
+            <option value="">Select a clinic</option>
+            {clinics.map((clinic) => (
+              <option key={clinic.id} value={clinic.id}>
+                {clinic.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <label>
         Region
         <input
@@ -89,7 +107,13 @@ export function RunWorkflowForm({ value, sources = [], onChange, onRun }) {
       </div>
       <div className="workflow-tip">
         <p className="eyebrow">Rule</p>
-        <p>{isFindClinics ? 'The workflow generates clinic candidates, then the user approves before save.' : 'Workflow placeholder. Preview-first behavior still applies.'}</p>
+        <p>
+          {isFindClinics
+            ? 'The workflow generates clinic candidates, then the user approves before save.'
+            : isFindContacts
+              ? 'The workflow generates likely contact candidates with role-based sourcing, then the user approves before save.'
+              : 'Workflow placeholder. Preview-first behavior still applies.'}
+        </p>
       </div>
       <button className="primary-button" onClick={onRun}>
         Run workflow

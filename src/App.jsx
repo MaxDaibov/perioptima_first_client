@@ -6,6 +6,9 @@ import { RunWorkflowForm } from './features/ai-workflows/components/RunWorkflowF
 import { WorkflowHistory } from './features/ai-workflows/components/WorkflowHistory'
 import { WorkflowResultsPreview } from './features/ai-workflows/components/WorkflowResultsPreview'
 import { mapWorkflowClinicToClinicEntity } from './features/clinics/utils/mapWorkflowClinicToClinicEntity'
+import { importedHealthSystems } from './data/healthSystemsImport'
+import { ContactResultsPreview } from './features/ai-workflows/components/ContactResultsPreview'
+import { mapWorkflowContactToContactEntity } from './features/contacts/utils/mapWorkflowContactToContactEntity'
 import './App.css'
 
 const WORKSPACE_ITEMS = ['Clinics', 'Tasks', 'Assets', 'Docs', 'Sources', 'Research Workflows']
@@ -477,7 +480,7 @@ const importedClinicResearch = [
   },
 ]
 
-const seedClinics = buildSeedClinics(importedClinicResearch)
+const seedClinics = buildSeedClinics([...importedClinicResearch, ...importedHealthSystems])
 const seedContacts = []
 const seedInteractions = []
 const seedTasks = buildSeedTasks(seedClinics)
@@ -819,7 +822,7 @@ function App() {
         setWorkspaceLastSavedAt(payload.updatedAt ?? '')
 
         if (payload.state) {
-          setClinics(payload.state.clinics ?? seedClinics)
+          setClinics(mergeClinicsWithSeed(payload.state.clinics ?? seedClinics))
           setContacts(payload.state.contacts ?? seedContacts)
           setInteractions(payload.state.interactions ?? seedInteractions)
           setTasks(payload.state.tasks ?? seedTasks)
@@ -930,26 +933,50 @@ function App() {
   }
 
   async function runWorkflow() {
-    if (workflowForm.workflowType !== WORKFLOW_TYPES.FIND_CLINICS_BY_REGION) {
-      notify('This mock implementation currently supports clinic finding only')
-      return
-    }
-
     let preview = []
     let sourceStatus = 'live'
 
-    try {
-      preview = await findClinicsByRegionLive({
-        ...workflowForm,
-        sources: sources.filter((source) => source.enabled),
-      })
-    } catch {
-      sourceStatus = 'fallback'
-    }
+    if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION) {
+      try {
+        preview = await findClinicsByRegionLive({
+          ...workflowForm,
+          sources: sources.filter((source) => source.enabled),
+        })
+      } catch {
+        sourceStatus = 'fallback'
+      }
 
-    if (!preview.length) {
-      preview = findClinicsByRegionMock(workflowForm)
-      sourceStatus = 'fallback'
+      if (!preview.length) {
+        preview = findClinicsByRegionMock(workflowForm)
+        sourceStatus = 'fallback'
+      }
+    } else if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
+      const clinic = clinics.find((item) => item.id === workflowForm.targetClinicId)
+      if (!clinic) {
+        notify('Select a target clinic first')
+        return
+      }
+      try {
+        const response = await fetch('/api/contact-research', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clinic, limit: workflowForm.resultLimit }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Contact research request failed')
+        }
+
+        const payload = await response.json()
+        preview = payload.candidates ?? []
+        sourceStatus = payload.sourceStatus ?? 'website'
+      } catch {
+        notify('Website contact research failed for this clinic')
+        return
+      }
+    } else {
+      notify('This workflow type is not implemented yet')
+      return
     }
 
     const runId = `run-${Date.now()}`
@@ -957,7 +984,10 @@ function App() {
       id: runId,
       workflowType: workflowForm.workflowType,
       input: { ...workflowForm },
-      output: `${preview.length} clinic candidates`,
+      output:
+        workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
+          ? `${preview.length} contact candidates`
+          : `${preview.length} clinic candidates`,
       status: 'preview_ready',
       created_at: new Date().toISOString(),
       generated_items: preview.length,
@@ -974,12 +1004,18 @@ function App() {
     setWorkflowHistory((current) => [run, ...current])
 
     if (!preview.length) {
-      notify('No clinics found for these filters')
+      notify(
+        workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
+          ? 'No contacts found for this clinic'
+          : 'No clinics found for these filters',
+      )
       return
     }
 
     if (sourceStatus === 'live') {
       notify('Workflow preview generated from live CMS search')
+    } else if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
+      notify('Website-sourced contact candidates generated')
     }
   }
 
@@ -1029,6 +1065,11 @@ function App() {
   }
 
   function saveApprovedPreview() {
+    if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
+      saveApprovedContacts()
+      return
+    }
+
     const approved = workflowPreview.filter((item) => item.approved && !item.rejected)
     if (!approved.length) return
 
@@ -1054,6 +1095,32 @@ function App() {
       output: `${approved.length} clinics saved to CRM`,
     })
     notify('Approved items saved')
+  }
+
+  function saveApprovedContacts() {
+    const approved = workflowPreview.filter((item) => item.approved && !item.rejected)
+    if (!approved.length) return
+
+    const newContacts = approved.map((item, index) => mapWorkflowContactToContactEntity(item, index))
+    setContacts((current) => {
+      const existingKeys = new Set(
+        current.map((contact) => `${contact.clinic_id}::${contact.full_name.toLowerCase()}::${contact.title.toLowerCase()}`),
+      )
+      const dedupedNewContacts = newContacts.filter((contact) => {
+        const key = `${contact.clinic_id}::${contact.full_name.toLowerCase()}::${contact.title.toLowerCase()}`
+        if (existingKeys.has(key)) return false
+        existingKeys.add(key)
+        return true
+      })
+      return [...dedupedNewContacts, ...current]
+    })
+
+    syncWorkflowRun(activeWorkflowRunId, workflowPreview, {
+      status: 'saved',
+      saved_items: approved.length,
+      output: `${approved.length} contacts saved to CRM`,
+    })
+    notify('Approved contacts saved')
   }
 
   function toggleTaskStatus(taskId) {
@@ -2153,6 +2220,7 @@ function App() {
               <RunWorkflowForm
                 value={workflowForm}
                 sources={sources}
+                clinics={clinics}
                 onChange={updateWorkflowForm}
                 onRun={runWorkflow}
               />
@@ -2164,6 +2232,20 @@ function App() {
                   items={workflowPreview}
                   selectedItemId={selectedWorkflowPreviewId}
                   sourceStatus={workflowSourceStatus}
+                  onSelectItem={setSelectedWorkflowPreviewId}
+                  onApproveSelected={approveAllPreview}
+                  onSaveApproved={saveApprovedPreview}
+                  onToggleSelected={togglePreviewSelected}
+                  onApprove={approvePreviewItem}
+                  onReject={rejectPreviewItem}
+                  onChangeField={updatePreviewItemField}
+                />
+              ) : null}
+
+              {workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS ? (
+                <ContactResultsPreview
+                  items={workflowPreview}
+                  selectedItemId={selectedWorkflowPreviewId}
                   onSelectItem={setSelectedWorkflowPreviewId}
                   onApproveSelected={approveAllPreview}
                   onSaveApproved={saveApprovedPreview}
@@ -2811,6 +2893,20 @@ function buildSeedClinics(clinics) {
         updated_at: updatedAt,
       }
     })
+}
+
+function mergeClinicsWithSeed(currentClinics = []) {
+  const combined = [...currentClinics, ...seedClinics]
+  const seen = new Set()
+
+  return combined.filter((clinic) => {
+    const key = clinic.name.trim().toLowerCase()
+    if (seen.has(key)) {
+      return false
+    }
+    seen.add(key)
+    return true
+  })
 }
 
 function buildSeedTasks(clinics) {
