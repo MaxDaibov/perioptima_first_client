@@ -28,7 +28,7 @@ export function ContactResultsPreview({
         <div>
           <p className="eyebrow">Preview first</p>
           <h3>Contact candidates</h3>
-          <p className="muted">These are website-sourced contact candidates extracted from clinic pages like leadership, team, department, and contact sections.</p>
+          <p className="muted">These are website-sourced contact candidates extracted from leadership, provider, team, directory, and contact pages on the clinic website.</p>
         </div>
         <div className="inline-actions wrap">
           <button className="ghost-button" onClick={onApproveSelected}>
@@ -45,7 +45,7 @@ export function ContactResultsPreview({
           <div className="workflow-empty-state">
             <p className="eyebrow">No results</p>
             <h3>No contact candidates yet</h3>
-            <p className="muted">Pick a target clinic and run the research workflow to search that clinic’s website for leadership, department, and contact pages.</p>
+            <p className="muted">Pick a target clinic and run the research workflow to search that clinic’s website for leadership, provider, directory, and contact pages.</p>
           </div>
         )}
 

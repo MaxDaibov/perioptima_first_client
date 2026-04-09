@@ -115,7 +115,7 @@ export function RunWorkflowForm({ value, sources = [], clinics = [], onChange, o
           {isFindClinics
             ? 'The workflow generates clinic candidates, then the user approves before save.'
             : isFindContacts
-              ? 'The workflow generates likely contact candidates with role-based sourcing, then the user approves before save.'
+              ? 'The workflow extracts real website-based contact candidates from leadership, provider, directory, and contact pages, then the user approves before save.'
               : 'Workflow placeholder. Preview-first behavior still applies.'}
         </p>
       </div>

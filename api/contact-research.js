@@ -8,16 +8,52 @@ const PAGE_KEYWORDS = [
   'contact',
   'directory',
   'providers',
+  'provider',
   'faculty',
-  'departments',
-  'department',
-  'surgery',
-  'surgical',
-  'oncology',
-  'cancer',
-  'gastro',
-  'digestive',
-  'transplant',
+  'find-a-doctor',
+  'find a doctor',
+  'medical staff',
+  'our doctors',
+  'physicians',
+  'care team',
+]
+
+const NEGATIVE_PAGE_HINTS = [
+  'faq',
+  'frequently-asked',
+  'visitor',
+  'guide',
+  'giving',
+  'donate',
+  'foundation',
+  'trial',
+  'trials',
+  'research',
+  'news',
+  'story',
+  'stories',
+  'event',
+  'calendar',
+  'appointment',
+  'billing',
+  'financial',
+  'volunteer',
+  'match',
+  'donation',
+  'donor',
+  'foundation',
+  'philanthropy',
+  'visitor-guide',
+  'patient-story',
+  'patient stories',
+  'campus-map',
+  'map',
+  'locations',
+  'classes',
+  'education',
+  'school',
+  'alix',
+  'giving-to',
 ]
 
 const COMMON_CONTACT_PATHS = [
@@ -32,16 +68,13 @@ const COMMON_CONTACT_PATHS = [
   '/contact-us',
   '/directory',
   '/providers',
+  '/provider-directory',
   '/find-a-doctor',
   '/faculty',
-  '/departments',
-  '/department/surgery',
-  '/services/surgery',
-  '/surgery',
-  '/surgical-services',
-  '/cancer',
-  '/oncology',
-  '/transplant',
+  '/medical-staff',
+  '/our-doctors',
+  '/physicians',
+  '/care-team',
 ]
 
 const TITLE_HINTS = [
@@ -59,10 +92,47 @@ const TITLE_HINTS = [
   'md',
   'm.d.',
   'rn',
+  'medical director',
+  'service line',
+  'perioperative',
+  'operations',
+]
+
+const BAD_NAME_PHRASES = [
+  'clinic',
+  'school',
+  'visitor guide',
+  'strategic initiative fund',
+  'be the match',
+  'accessed',
+  'platform',
+  'clinical trials',
+  'frequently asked',
+  'contact us',
+  'about mayo clinic',
+  'mayo clinic',
+  'visitor guide',
+  'care at',
+  'find a doctor',
+  'patient centered',
+  'be the match',
+  'president',
+  'oncology',
+  'hepatobiliary',
+  'surgery',
+  'department',
+  'fund',
+  'foundation',
+  'unbound',
+  'novel therapeutics',
+  'advanced diagnostics',
 ]
 
 const NAME_REGEX =
   /\b([A-Z][a-z]+(?:\s+[A-Z]\.)?(?:\s+[A-Z][a-z]+){1,3})(?:,\s*(?:MD|M\.D\.|DO|RN|PhD))?\b/g
+
+const STRONG_TITLE_REGEX =
+  /\b(chief|chair|vice president|vp|medical director|director|administrator|officer|manager|navigator|surgeon)\b/i
 
 function toAbsoluteUrl(baseUrl, href) {
   try {
@@ -78,6 +148,13 @@ function normalizeWhitespace(value) {
 
 function looksRelevantLink(text, href) {
   const haystack = `${text} ${href}`.toLowerCase()
+  if (NEGATIVE_PAGE_HINTS.some((keyword) => haystack.includes(keyword))) return false
+  return PAGE_KEYWORDS.some((keyword) => haystack.includes(keyword))
+}
+
+function isLikelyContactPage(pageUrl, label = '') {
+  const haystack = `${pageUrl} ${label}`.toLowerCase()
+  if (NEGATIVE_PAGE_HINTS.some((keyword) => haystack.includes(keyword))) return false
   return PAGE_KEYWORDS.some((keyword) => haystack.includes(keyword))
 }
 
@@ -105,7 +182,7 @@ async function fetchPage(url) {
   }
 
   const html = await response.text()
-  return cheerio.load(html)
+  return { $: cheerio.load(html), finalUrl: response.url }
 }
 
 function buildFallbackPaths(baseUrl) {
@@ -140,6 +217,34 @@ function extractRelevantLinks($, baseUrl) {
   return Array.from(deduped.values()).slice(0, 8)
 }
 
+function isAllowedHost(url, clinicWebsite) {
+  try {
+    const clinicHost = new URL(clinicWebsite).hostname.replace(/^www\./, '')
+    const candidateHost = new URL(url).hostname.replace(/^www\./, '')
+    return candidateHost === clinicHost || candidateHost.endsWith(`.${clinicHost}`)
+  } catch {
+    return false
+  }
+}
+
+function isLikelyPersonName(name) {
+  const normalized = name.toLowerCase().trim()
+  if (BAD_NAME_PHRASES.some((phrase) => normalized.includes(phrase))) return false
+  if (/\d/.test(normalized)) return false
+  const parts = normalized.split(/\s+/).filter(Boolean)
+  if (parts.length < 2 || parts.length > 4) return false
+  if (parts.some((part) => part.length <= 1)) return false
+  return parts.every((part) => /^[a-z.'-]+$/.test(part))
+}
+
+function isRelevantTitle(title) {
+  const normalized = title.toLowerCase()
+  if (NEGATIVE_PAGE_HINTS.some((keyword) => normalized.includes(keyword))) return false
+  if (/student|resident|fellow|intern|volunteer/.test(normalized)) return false
+  if (!STRONG_TITLE_REGEX.test(normalized)) return false
+  return scoreTitle(title) >= 2
+}
+
 function inferDepartment(title, clinic) {
   const normalized = title.toLowerCase()
   if (/digital|innovation|informatics/.test(normalized)) return 'Digital Health'
@@ -171,12 +276,14 @@ function inferScores(title) {
 
 function extractPeopleFromPage($, pageUrl, clinic) {
   const candidates = []
+  if (!isLikelyContactPage(pageUrl)) return candidates
 
   $('article, section, li, div.card, div[class*="card"], div[class*="profile"], div[class*="person"]').each(
     (_, node) => {
       const block = $(node)
       const text = normalizeWhitespace(block.text())
-      if (!text || text.length > 450) return
+      if (!text || text.length > 320) return
+      if (NEGATIVE_PAGE_HINTS.some((keyword) => text.toLowerCase().includes(keyword))) return
 
       const names = [...text.matchAll(NAME_REGEX)].map((match) => match[1]).filter(Boolean)
       if (!names.length) return
@@ -188,7 +295,7 @@ function extractPeopleFromPage($, pageUrl, clinic) {
 
       for (const name of names.slice(0, 2)) {
         const title = lines.find((line) => line !== name && scoreTitle(line) > 0) ?? ''
-        if (!title) continue
+        if (!isLikelyPersonName(name) || !isRelevantTitle(title)) continue
 
         const { influence, champion } = inferScores(title)
         candidates.push({
@@ -217,22 +324,26 @@ function extractPeopleFromPage($, pageUrl, clinic) {
 
 function extractPeopleFromHeadings($, pageUrl, clinic) {
   const candidates = []
+  if (!isLikelyContactPage(pageUrl)) return candidates
 
   $('h1, h2, h3, h4, strong, b').each((_, node) => {
     const heading = normalizeWhitespace($(node).text())
+    if (heading.length > 80) return
     const matches = [...heading.matchAll(NAME_REGEX)].map((match) => match[1]).filter(Boolean)
     if (!matches.length) return
 
     const parentText = normalizeWhitespace($(node).parent().text())
+    if (NEGATIVE_PAGE_HINTS.some((keyword) => parentText.toLowerCase().includes(keyword))) return
     const titleText = parentText
       .replace(heading, '')
       .split(/(?<=[.])\s+| \| | - | — /)
-      .map((line) => line.trim())
+      .map((line) => normalizeWhitespace(line))
       .find((line) => scoreTitle(line) > 0) ?? ''
 
-    if (!titleText) return
+    if (!titleText || !isRelevantTitle(titleText)) return
 
     for (const name of matches.slice(0, 1)) {
+      if (!isLikelyPersonName(name)) continue
       const { influence, champion } = inferScores(titleText)
       candidates.push({
         clinic_id: clinic.id,
@@ -282,7 +393,12 @@ export default async function handler(request, response) {
 
   try {
     const homepageUrl = clinic.website
-    const homepage = await fetchPage(homepageUrl)
+    const homepageResult = await fetchPage(homepageUrl)
+    if (!isAllowedHost(homepageResult.finalUrl, homepageUrl)) {
+      throw new Error('Homepage redirected outside the clinic domain')
+    }
+
+    const homepage = homepageResult.$
     const relevantLinks = extractRelevantLinks(homepage, homepageUrl)
     const fallbackLinks = buildFallbackPaths(homepageUrl)
     const mergedLinks = new Map()
@@ -304,10 +420,23 @@ export default async function handler(request, response) {
 
     for (const page of pagesToSearch) {
       try {
-        const pageDom = page.url === homepageUrl ? homepage : await fetchPage(page.url)
+        const pageResult =
+          page.url === homepageUrl ? { $: homepage, finalUrl: homepageUrl } : await fetchPage(page.url)
+        if (!isAllowedHost(pageResult.finalUrl, homepageUrl)) {
+          searchedPages.push({ ...page, skipped: true, reason: 'external redirect' })
+          continue
+        }
+
+        const pageUrl = pageResult.finalUrl
+        const pageHaystack = `${page.label} ${pageUrl}`.toLowerCase()
+        if (!isLikelyContactPage(pageUrl, page.label)) {
+          searchedPages.push({ ...page, skipped: true, reason: 'low-signal page' })
+          continue
+        }
+
         searchedPages.push(page)
-        candidates.push(...extractPeopleFromPage(pageDom, page.url, clinic))
-        candidates.push(...extractPeopleFromHeadings(pageDom, page.url, clinic))
+        candidates.push(...extractPeopleFromPage(pageResult.$, pageUrl, clinic))
+        candidates.push(...extractPeopleFromHeadings(pageResult.$, pageUrl, clinic))
       } catch {
         searchedPages.push({ ...page, failed: true })
       }
