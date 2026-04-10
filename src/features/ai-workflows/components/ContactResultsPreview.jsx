@@ -218,13 +218,10 @@ function ContactSearchLeads({ searchLeads, searchedPages, websiteStatus }) {
               <p className="muted compact-copy">{lead.roleReason}</p>
               <div className="search-lead-actions">
                 <a className="ghost-button small search-lead-action" href={lead.websiteSearchUrl} target="_blank" rel="noreferrer">
-                  Site search
+                  Official site
                 </a>
                 <a className="ghost-button small search-lead-action" href={lead.linkedinSearchUrl} target="_blank" rel="noreferrer">
                   LinkedIn search
-                </a>
-                <a className="ghost-button small search-lead-action" href={lead.recruitinUrl} target="_blank" rel="noreferrer">
-                  Recruitin
                 </a>
               </div>
             </article>
