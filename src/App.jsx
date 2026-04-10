@@ -2428,7 +2428,7 @@ function App() {
               />
             </div>
 
-            <div className="panel asset-editor">
+            <div className="panel asset-editor workflow-output-panel">
               {workflowForm.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION ? (
                 <WorkflowResultsPreview
                   items={workflowPreview}

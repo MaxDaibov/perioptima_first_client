@@ -537,6 +537,10 @@
   min-height: calc(100vh - 180px);
 }
 
+.workflow-output-panel {
+  min-height: 0;
+}
+
 .doc-editor {
   min-height: 320px;
 }
