@@ -216,14 +216,14 @@ function ContactSearchLeads({ searchLeads, searchedPages, websiteStatus }) {
             <article key={lead.id} className="search-lead-card">
               <h4>{lead.title}</h4>
               <p className="muted compact-copy">{lead.roleReason}</p>
-              <div className="inline-actions wrap">
-                <a className="ghost-button small" href={lead.websiteSearchUrl} target="_blank" rel="noreferrer">
+              <div className="search-lead-actions">
+                <a className="ghost-button small search-lead-action" href={lead.websiteSearchUrl} target="_blank" rel="noreferrer">
                   Site search
                 </a>
-                <a className="ghost-button small" href={lead.linkedinSearchUrl} target="_blank" rel="noreferrer">
+                <a className="ghost-button small search-lead-action" href={lead.linkedinSearchUrl} target="_blank" rel="noreferrer">
                   LinkedIn search
                 </a>
-                <a className="ghost-button small" href={lead.recruitinUrl} target="_blank" rel="noreferrer">
+                <a className="ghost-button small search-lead-action" href={lead.recruitinUrl} target="_blank" rel="noreferrer">
                   Recruitin
                 </a>
               </div>

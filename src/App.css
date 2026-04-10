@@ -726,6 +726,22 @@
   border: 1px solid rgba(23, 49, 59, 0.08);
 }
 
+.search-lead-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: auto;
+}
+
+.search-lead-action {
+  min-width: 0;
+  padding: 8px 9px;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
 .search-lead-card h4,
 .search-lead-card p {
   margin: 0;
@@ -986,6 +1002,10 @@
   }
 
   .compact-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-lead-actions {
     grid-template-columns: 1fr;
   }
 }
