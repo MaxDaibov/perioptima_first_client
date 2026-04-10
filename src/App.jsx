@@ -695,6 +695,7 @@ function App() {
   const [activeWorkflowRunId, setActiveWorkflowRunId] = useState('')
   const [selectedWorkflowPreviewId, setSelectedWorkflowPreviewId] = useState('')
   const [workflowSourceStatus, setWorkflowSourceStatus] = useState('')
+  const [contactResearchContext, setContactResearchContext] = useState({ searchLeads: null, searchedPages: [] })
   const [selectedClinicId, setSelectedClinicId] = useState(seedClinics[0].id)
   const [selectedDocumentId, setSelectedDocumentId] = useState(seedDocuments[0].id)
   const [editor, setEditor] = useState(null)
@@ -1089,6 +1090,7 @@ function App() {
     try {
       let preview = []
       let sourceStatus = 'live'
+      let researchContext = { searchLeads: null, searchedPages: [] }
 
       if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION) {
         try {
@@ -1124,6 +1126,10 @@ function App() {
           const payload = await response.json()
           preview = payload.candidates ?? []
           sourceStatus = payload.sourceStatus ?? 'website'
+          researchContext = {
+            searchLeads: payload.searchLeads ?? null,
+            searchedPages: payload.searchedPages ?? [],
+          }
         } catch {
           notify('Website contact research failed for this clinic')
           return
@@ -1148,6 +1154,7 @@ function App() {
         approved_items: 0,
         saved_items: 0,
         previewItems: preview,
+        researchContext,
         sourceStatus,
       }
 
@@ -1155,6 +1162,7 @@ function App() {
       setWorkflowPreview(preview)
       setSelectedWorkflowPreviewId(preview[0]?.id ?? '')
       setWorkflowSourceStatus(sourceStatus)
+      setContactResearchContext(researchContext)
       setWorkflowHistory((current) => [run, ...current])
 
       if (!preview.length) {
@@ -1219,6 +1227,7 @@ function App() {
     setWorkflowPreview(run.previewItems ?? [])
     setSelectedWorkflowPreviewId(run.previewItems?.[0]?.id ?? '')
     setWorkflowSourceStatus(run.sourceStatus ?? '')
+    setContactResearchContext(run.researchContext ?? { searchLeads: null, searchedPages: [] })
   }
 
   function saveApprovedPreview() {
@@ -2448,6 +2457,8 @@ function App() {
                   onReject={rejectPreviewItem}
                   onChangeField={updatePreviewItemField}
                   isSaving={actionStatus === 'Saving approved contacts...'}
+                  searchLeads={contactResearchContext.searchLeads}
+                  searchedPages={contactResearchContext.searchedPages}
                 />
               ) : null}
 

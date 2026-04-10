@@ -77,6 +77,15 @@ const COMMON_CONTACT_PATHS = [
   '/care-team',
 ]
 
+const TARGET_TITLES = [
+  'ERAS Coordinator',
+  'Director of Perioperative',
+  'Chief of Surgery',
+  'Chief of Anesthesiology',
+  'VP Quality Improvement',
+  'Director of Clinical Outcomes',
+]
+
 const TITLE_HINTS = [
   'chief',
   'director',
@@ -144,6 +153,102 @@ function toAbsoluteUrl(baseUrl, href) {
 
 function normalizeWhitespace(value) {
   return value.replace(/\s+/g, ' ').trim()
+}
+
+function getClinicDomain(website) {
+  try {
+    return new URL(website).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+function buildGoogleSearchUrl(query) {
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`
+}
+
+function buildRecruitinUrl(title, clinicName) {
+  const params = new URLSearchParams({
+    country: 'all',
+    'job-title': title,
+    similar: 'on',
+    'include-keywords': clinicName,
+    'exclude-keywords': '',
+    education: 'all',
+    company: clinicName,
+    network: 'LinkedIn',
+    savedSearchLabel: 'icon-linkedin-square@blank search in All countries',
+    submit: 'true',
+  })
+
+  return `https://recruitin.net/?${params.toString()}`
+}
+
+function buildContactSearchLeads(clinic) {
+  const domain = getClinicDomain(clinic.website)
+  const specialtyTerms = String(clinic.specialty_focus ?? '')
+    .split(',')
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .slice(0, 3)
+
+  const titleLeads = TARGET_TITLES.map((title) => {
+    const websiteQuery = [
+      domain ? `site:${domain}` : '',
+      `"${title}"`,
+      `"${clinic.name}"`,
+      specialtyTerms[0] ? `"${specialtyTerms[0]}"` : '',
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    const linkedinQuery = [
+      'site:linkedin.com/in',
+      `"${title}"`,
+      `"${clinic.name}"`,
+    ]
+      .filter(Boolean)
+      .join(' ')
+
+    return {
+      id: `search-lead-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+      title,
+      roleReason: getTargetTitleReason(title),
+      websiteQuery,
+      websiteSearchUrl: buildGoogleSearchUrl(websiteQuery),
+      linkedinQuery,
+      linkedinSearchUrl: buildGoogleSearchUrl(linkedinQuery),
+      recruitinUrl: buildRecruitinUrl(title, clinic.name),
+    }
+  })
+
+  const departmentQueries = [
+    domain ? `site:${domain} "${clinic.name}" "perioperative services" leadership` : '',
+    domain ? `site:${domain} "${clinic.name}" "surgery" "medical director"` : '',
+    domain ? `site:${domain} "${clinic.name}" "quality improvement" "director"` : '',
+    domain ? `site:${domain} "${clinic.name}" "clinical outcomes" "director"` : '',
+  ].filter(Boolean)
+
+  return {
+    targetTitles: TARGET_TITLES,
+    titleLeads,
+    departmentLeads: departmentQueries.map((query, index) => ({
+      id: `department-search-${index + 1}`,
+      query,
+      searchUrl: buildGoogleSearchUrl(query),
+    })),
+  }
+}
+
+function getTargetTitleReason(title) {
+  const normalized = title.toLowerCase()
+  if (normalized.includes('eras')) return 'Owns enhanced recovery protocols and perioperative pathway execution.'
+  if (normalized.includes('perioperative')) return 'Likely owns operating-room, pre-op, and post-op workflow performance.'
+  if (normalized.includes('surgery')) return 'Clinical sponsor for surgical care redesign and pilot credibility.'
+  if (normalized.includes('anesthesiology')) return 'Relevant to perioperative risk, protocols, and OR-adjacent workflows.'
+  if (normalized.includes('quality')) return 'Economic and quality sponsor for outcomes, readmissions, and workflow improvement.'
+  if (normalized.includes('outcomes')) return 'Likely accountable for clinical outcomes measurement and improvement.'
+  return 'Potential buyer or champion for perioperative workflow improvement.'
 }
 
 function looksRelevantLink(text, href) {
@@ -456,6 +561,7 @@ export default async function handler(request, response) {
     response.status(200).json({
       candidates: deduped,
       searchedPages,
+      searchLeads: buildContactSearchLeads(clinic),
       sourceStatus: 'website',
     })
   } catch (error) {

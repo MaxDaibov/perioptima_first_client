@@ -20,8 +20,13 @@ export function ContactResultsPreview({
   onReject,
   onChangeField,
   isSaving = false,
+  searchLeads = null,
+  searchedPages = [],
 }) {
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0]
+  const visibleSearchedPages = searchedPages
+    .filter((page) => !page.skipped && !page.failed)
+    .slice(0, 5)
 
   return (
     <>
@@ -162,6 +167,67 @@ export function ContactResultsPreview({
           </>
         )}
       </div>
+
+      <ContactSearchLeads searchLeads={searchLeads} searchedPages={visibleSearchedPages} />
     </>
+  )
+}
+
+function ContactSearchLeads({ searchLeads, searchedPages }) {
+  if (!searchLeads && !searchedPages.length) return null
+
+  return (
+    <div className="contact-search-leads">
+      <div className="panel-header compact-header">
+        <div>
+          <p className="eyebrow">Manual search leads</p>
+          <h3>Targeted contact searches</h3>
+          <p className="muted">
+            These are OSINT-style search links for the exact buyer titles we care about. They are not saved as contacts unless a real person is verified.
+          </p>
+        </div>
+      </div>
+
+      {searchLeads?.targetTitles?.length ? (
+        <div className="target-title-row">
+          {searchLeads.targetTitles.map((title) => (
+            <span key={title} className="chip">{title}</span>
+          ))}
+        </div>
+      ) : null}
+
+      {searchLeads?.titleLeads?.length ? (
+        <div className="search-lead-grid">
+          {searchLeads.titleLeads.map((lead) => (
+            <article key={lead.id} className="search-lead-card">
+              <h4>{lead.title}</h4>
+              <p className="muted">{lead.roleReason}</p>
+              <div className="inline-actions wrap">
+                <a className="ghost-button small" href={lead.websiteSearchUrl} target="_blank" rel="noreferrer">
+                  Site search
+                </a>
+                <a className="ghost-button small" href={lead.linkedinSearchUrl} target="_blank" rel="noreferrer">
+                  LinkedIn search
+                </a>
+                <a className="ghost-button small" href={lead.recruitinUrl} target="_blank" rel="noreferrer">
+                  Recruitin
+                </a>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : null}
+
+      {searchedPages.length ? (
+        <div className="workflow-tip">
+          <p className="eyebrow">Website pages checked</p>
+          {searchedPages.map((page) => (
+            <p key={`${page.url}-${page.label}`}>
+              <a href={page.url} target="_blank" rel="noreferrer">{page.label || page.url}</a>
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
   )
 }
