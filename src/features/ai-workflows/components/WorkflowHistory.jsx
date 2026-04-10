@@ -8,13 +8,15 @@ function getWorkflowName(workflowType) {
 
 export function WorkflowHistory({ runs, activeRunId, onOpenRun }) {
   return (
-    <div className="history-panel">
-      <div className="panel-header">
+    <details className="history-panel compact-history">
+      <summary>
         <div>
           <p className="eyebrow">Runs</p>
           <h3>Workflow history</h3>
+          <p className="muted">{runs.length} saved runs</p>
         </div>
-      </div>
+        <span className="ghost-button small">Open</span>
+      </summary>
 
       <div className="stack-list">
         {runs.map((run) => (
@@ -36,6 +38,6 @@ export function WorkflowHistory({ runs, activeRunId, onOpenRun }) {
           </button>
         ))}
       </div>
-    </div>
+    </details>
   )
 }

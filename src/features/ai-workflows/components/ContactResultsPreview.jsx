@@ -46,12 +46,14 @@ export function ContactResultsPreview({
         </div>
       </div>
 
+      <ContactSearchLeads searchLeads={searchLeads} searchedPages={visibleSearchedPages} />
+
       <div className="workflow-results-layout">
         {!items.length && (
           <div className="workflow-empty-state">
             <p className="eyebrow">No results</p>
-            <h3>No contact candidates yet</h3>
-            <p className="muted">Pick a target clinic and run the research workflow to search that clinic’s website for leadership, provider, directory, and contact pages.</p>
+            <h3>No verified contacts yet</h3>
+            <p className="muted">Use the targeted searches above to continue manual research, or try another clinic with stronger leadership/provider pages.</p>
           </div>
         )}
 
@@ -167,8 +169,6 @@ export function ContactResultsPreview({
           </>
         )}
       </div>
-
-      <ContactSearchLeads searchLeads={searchLeads} searchedPages={visibleSearchedPages} />
     </>
   )
 }
@@ -197,11 +197,11 @@ function ContactSearchLeads({ searchLeads, searchedPages }) {
       ) : null}
 
       {searchLeads?.titleLeads?.length ? (
-        <div className="search-lead-grid">
+        <div className="search-lead-grid compact-search-grid">
           {searchLeads.titleLeads.map((lead) => (
             <article key={lead.id} className="search-lead-card">
               <h4>{lead.title}</h4>
-              <p className="muted">{lead.roleReason}</p>
+              <p className="muted compact-copy">{lead.roleReason}</p>
               <div className="inline-actions wrap">
                 <a className="ghost-button small" href={lead.websiteSearchUrl} target="_blank" rel="noreferrer">
                   Site search

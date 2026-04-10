@@ -663,9 +663,11 @@
 }
 
 .contact-search-leads {
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid rgba(23, 49, 59, 0.08);
+  margin: 0 0 18px;
+  padding: 16px;
+  border-radius: 22px;
+  background: #f6efe6;
+  border: 1px solid rgba(23, 49, 59, 0.08);
 }
 
 .compact-header {
@@ -685,10 +687,14 @@
   gap: 12px;
 }
 
+.compact-search-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .search-lead-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   padding: 14px;
   border-radius: 18px;
   background: #fffdfa;
@@ -698,6 +704,11 @@
 .search-lead-card h4,
 .search-lead-card p {
   margin: 0;
+}
+
+.compact-copy {
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .workflow-results-layout {
@@ -711,6 +722,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 560px;
+  overflow: auto;
+  padding-right: 4px;
 }
 
 .workflow-list-item {
@@ -784,6 +798,28 @@
 
 .history-panel {
   margin-top: 22px;
+}
+
+.compact-history {
+  border-top: 1px solid rgba(23, 49, 59, 0.08);
+  padding-top: 16px;
+}
+
+.compact-history summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.compact-history summary::-webkit-details-marker {
+  display: none;
+}
+
+.compact-history[open] summary {
+  margin-bottom: 14px;
 }
 
 .history-stats {
@@ -921,6 +957,10 @@
   }
 
   .search-lead-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-search-grid {
     grid-template-columns: 1fr;
   }
 }
