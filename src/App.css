@@ -747,6 +747,28 @@
   margin: 0;
 }
 
+.manual-contact-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  background: #fffdfa;
+  border: 1px solid rgba(23, 49, 59, 0.08);
+}
+
+.manual-contact-capture h3,
+.manual-contact-capture p {
+  margin: 0;
+}
+
+.manual-contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .compact-copy {
   font-size: 0.9rem;
   line-height: 1.45;
@@ -1006,6 +1028,10 @@
   }
 
   .search-lead-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-contact-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -32,6 +32,21 @@ const FIT_SCORE_GUIDE = [
   'Clear perioperative workflow relevance',
 ]
 
+const CONTACT_ROLE_HINTS = [
+  { pattern: /chief.*surgery|chair.*surgery|surgeon/i, roleType: 'Clinical champion', department: 'Surgery', influence: 9, champion: 82 },
+  { pattern: /perioperative|eras|operating room|or\b/i, roleType: 'Operational buyer', department: 'Perioperative Services', influence: 8, champion: 78 },
+  { pattern: /anesthes/i, roleType: 'Clinical champion', department: 'Anesthesiology', influence: 8, champion: 72 },
+  { pattern: /quality|outcomes|clinical outcomes|improvement/i, roleType: 'Economic buyer', department: 'Quality and Outcomes', influence: 8, champion: 68 },
+  { pattern: /navigation|navigator|patient experience/i, roleType: 'Workflow champion', department: 'Patient Navigation', influence: 7, champion: 74 },
+]
+
+function inferSeniorityFromTitle(title = '') {
+  if (/chief|chair|president|cmo|cio|coo|vp|vice president/i.test(title)) return 'executive'
+  if (/director|head|lead/i.test(title)) return 'director'
+  if (/manager|coordinator/i.test(title)) return 'manager'
+  return 'unknown'
+}
+
 let toastTimer = 0
 
 const importedClinicResearch = [
@@ -1222,6 +1237,61 @@ function App() {
     updateWorkflowPreview((current) =>
       current.map((item) => (item.id === itemId ? { ...item, [field]: value } : item)),
     )
+  }
+
+  function addManualContactCandidate(values) {
+    const targetClinic = clinics.find((item) => item.id === workflowForm.targetClinicId)
+    if (!targetClinic) {
+      notify('Select a target clinic first')
+      return
+    }
+
+    const fullName = values.full_name?.trim()
+    const title = values.title?.trim()
+    if (!fullName || !title) {
+      notify('Add at least a name and title')
+      return
+    }
+
+    const roleHint =
+      CONTACT_ROLE_HINTS.find((hint) => hint.pattern.test(title)) ?? {
+        roleType: 'Potential buyer',
+        department: values.department?.trim() || 'Leadership',
+        influence: 7,
+        champion: 60,
+      }
+    const department = values.department?.trim() || roleHint.department
+    const source = values.source?.trim() || values.linkedin_url?.trim() || targetClinic.website
+    const candidate = {
+      id: `manual-contact-${Date.now()}`,
+      clinic_id: targetClinic.id,
+      clinic_name: targetClinic.name,
+      full_name: fullName,
+      title,
+      department,
+      email: values.email?.trim() ?? '',
+      linkedin_url: values.linkedin_url?.trim() ?? '',
+      phone: '',
+      seniority: inferSeniorityFromTitle(title),
+      role_type: roleHint.roleType,
+      influence_score: roleHint.influence,
+      champion_probability: roleHint.champion,
+      contact_status: 'researching',
+      personalization_notes:
+        values.personalization_notes?.trim() ||
+        `Manually added from Research Workflows after reviewing ${source}.`,
+      source,
+      confidence: 0.88,
+      selected: true,
+      approved: true,
+      rejected: false,
+    }
+
+    updateWorkflowPreview((current) => [candidate, ...current], {
+      output: `${workflowPreview.length + 1} contact candidates`,
+    })
+    setSelectedWorkflowPreviewId(candidate.id)
+    notify('Contact added to preview')
   }
 
   function openWorkflowRun(runId) {
@@ -2461,6 +2531,7 @@ function App() {
                   onApprove={approvePreviewItem}
                   onReject={rejectPreviewItem}
                   onChangeField={updatePreviewItemField}
+                  onAddManualContact={addManualContactCandidate}
                   isSaving={actionStatus === 'Saving approved contacts...'}
                   searchLeads={contactResearchContext.searchLeads}
                   searchedPages={contactResearchContext.searchedPages}

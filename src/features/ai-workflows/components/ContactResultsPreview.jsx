@@ -1,3 +1,5 @@
+import { useState } from 'react'
+
 const CONTACT_FIELDS = [
   ['full_name', 'Full name'],
   ['title', 'Title'],
@@ -8,6 +10,16 @@ const CONTACT_FIELDS = [
   ['source', 'Source links'],
   ['personalization_notes', 'Personalization notes'],
 ]
+
+const EMPTY_MANUAL_CONTACT = {
+  full_name: '',
+  title: '',
+  department: '',
+  email: '',
+  linkedin_url: '',
+  source: '',
+  personalization_notes: '',
+}
 
 export function ContactResultsPreview({
   items,
@@ -23,6 +35,7 @@ export function ContactResultsPreview({
   searchLeads = null,
   searchedPages = [],
   websiteStatus = null,
+  onAddManualContact,
 }) {
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0]
   const visibleSearchedPages = searchedPages
@@ -51,6 +64,7 @@ export function ContactResultsPreview({
         searchLeads={searchLeads}
         searchedPages={visibleSearchedPages}
         websiteStatus={websiteStatus}
+        onAddManualContact={onAddManualContact}
       />
 
       <div className="workflow-results-layout">
@@ -178,8 +192,22 @@ export function ContactResultsPreview({
   )
 }
 
-function ContactSearchLeads({ searchLeads, searchedPages, websiteStatus }) {
+function ContactSearchLeads({ searchLeads, searchedPages, websiteStatus, onAddManualContact }) {
+  const [manualContact, setManualContact] = useState(EMPTY_MANUAL_CONTACT)
+
   if (!searchLeads && !searchedPages.length && !websiteStatus) return null
+
+  function updateManualContact(field, value) {
+    setManualContact((current) => ({ ...current, [field]: value }))
+  }
+
+  function submitManualContact(event) {
+    event.preventDefault()
+    onAddManualContact?.(manualContact)
+    setManualContact(EMPTY_MANUAL_CONTACT)
+  }
+
+  const canAddManualContact = manualContact.full_name.trim() && manualContact.title.trim()
 
   return (
     <div className="contact-search-leads">
@@ -239,6 +267,89 @@ function ContactSearchLeads({ searchLeads, searchedPages, websiteStatus }) {
           ))}
         </div>
       ) : null}
+
+      <form className="manual-contact-capture" onSubmit={submitManualContact}>
+        <div>
+          <p className="eyebrow">Found someone?</p>
+          <h3>Add found contact</h3>
+          <p className="muted">
+            Paste the person you found from LinkedIn or the official site. This adds them to preview first, not directly to CRM.
+          </p>
+        </div>
+
+        <div className="manual-contact-grid">
+          <label>
+            Full name
+            <input
+              className="text-input"
+              value={manualContact.full_name}
+              onChange={(event) => updateManualContact('full_name', event.target.value)}
+              placeholder="Jane Smith"
+            />
+          </label>
+          <label>
+            Title
+            <input
+              className="text-input"
+              value={manualContact.title}
+              onChange={(event) => updateManualContact('title', event.target.value)}
+              placeholder="Director of Perioperative Services"
+            />
+          </label>
+          <label>
+            Department
+            <input
+              className="text-input"
+              value={manualContact.department}
+              onChange={(event) => updateManualContact('department', event.target.value)}
+              placeholder="Surgery, Quality, Perioperative"
+            />
+          </label>
+          <label>
+            Email
+            <input
+              className="text-input"
+              value={manualContact.email}
+              onChange={(event) => updateManualContact('email', event.target.value)}
+              placeholder="optional"
+            />
+          </label>
+          <label>
+            LinkedIn URL
+            <input
+              className="text-input"
+              value={manualContact.linkedin_url}
+              onChange={(event) => updateManualContact('linkedin_url', event.target.value)}
+              placeholder="https://linkedin.com/in/..."
+            />
+          </label>
+          <label>
+            Source URL
+            <input
+              className="text-input"
+              value={manualContact.source}
+              onChange={(event) => updateManualContact('source', event.target.value)}
+              placeholder="LinkedIn or clinic page"
+            />
+          </label>
+        </div>
+
+        <label>
+          Notes
+          <textarea
+            className="editor-area compact"
+            value={manualContact.personalization_notes}
+            onChange={(event) => updateManualContact('personalization_notes', event.target.value)}
+            placeholder="Why this person looks relevant"
+          />
+        </label>
+
+        <div className="inline-actions wrap">
+          <button className="primary-button" type="submit" disabled={!canAddManualContact}>
+            Add to preview
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
