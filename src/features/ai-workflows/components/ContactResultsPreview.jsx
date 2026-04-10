@@ -22,6 +22,7 @@ export function ContactResultsPreview({
   isSaving = false,
   searchLeads = null,
   searchedPages = [],
+  websiteStatus = null,
 }) {
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0]
   const visibleSearchedPages = searchedPages
@@ -46,7 +47,11 @@ export function ContactResultsPreview({
         </div>
       </div>
 
-      <ContactSearchLeads searchLeads={searchLeads} searchedPages={visibleSearchedPages} />
+      <ContactSearchLeads
+        searchLeads={searchLeads}
+        searchedPages={visibleSearchedPages}
+        websiteStatus={websiteStatus}
+      />
 
       <div className="workflow-results-layout">
         {!items.length && (
@@ -173,8 +178,8 @@ export function ContactResultsPreview({
   )
 }
 
-function ContactSearchLeads({ searchLeads, searchedPages }) {
-  if (!searchLeads && !searchedPages.length) return null
+function ContactSearchLeads({ searchLeads, searchedPages, websiteStatus }) {
+  if (!searchLeads && !searchedPages.length && !websiteStatus) return null
 
   return (
     <div className="contact-search-leads">
@@ -187,6 +192,15 @@ function ContactSearchLeads({ searchLeads, searchedPages }) {
           </p>
         </div>
       </div>
+
+      {websiteStatus ? (
+        <div className={`workflow-source-note ${websiteStatus.status === 'failed' ? 'warning' : ''}`}>
+          <p className="eyebrow">
+            {websiteStatus.status === 'failed' ? 'Website fallback' : 'Search mode'}
+          </p>
+          <p>{websiteStatus.message}</p>
+        </div>
+      ) : null}
 
       {searchLeads?.targetTitles?.length ? (
         <div className="target-title-row">

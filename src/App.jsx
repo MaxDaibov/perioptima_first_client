@@ -695,7 +695,11 @@ function App() {
   const [activeWorkflowRunId, setActiveWorkflowRunId] = useState('')
   const [selectedWorkflowPreviewId, setSelectedWorkflowPreviewId] = useState('')
   const [workflowSourceStatus, setWorkflowSourceStatus] = useState('')
-  const [contactResearchContext, setContactResearchContext] = useState({ searchLeads: null, searchedPages: [] })
+  const [contactResearchContext, setContactResearchContext] = useState({
+    searchLeads: null,
+    searchedPages: [],
+    websiteStatus: null,
+  })
   const [selectedClinicId, setSelectedClinicId] = useState(seedClinics[0].id)
   const [selectedDocumentId, setSelectedDocumentId] = useState(seedDocuments[0].id)
   const [editor, setEditor] = useState(null)
@@ -1090,7 +1094,7 @@ function App() {
     try {
       let preview = []
       let sourceStatus = 'live'
-      let researchContext = { searchLeads: null, searchedPages: [] }
+      let researchContext = { searchLeads: null, searchedPages: [], websiteStatus: null }
 
       if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION) {
         try {
@@ -1129,9 +1133,10 @@ function App() {
           researchContext = {
             searchLeads: payload.searchLeads ?? null,
             searchedPages: payload.searchedPages ?? [],
+            websiteStatus: payload.websiteStatus ?? null,
           }
         } catch {
-          notify('Website contact research failed for this clinic')
+          notify('Contact research failed before search links could be generated')
           return
         }
       } else {
@@ -1168,7 +1173,7 @@ function App() {
       if (!preview.length) {
         notify(
           workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
-            ? 'No extractable website contacts found for this clinic yet'
+            ? 'No verified contacts yet. Targeted search links are ready.'
             : 'No clinics found for these filters',
         )
         return
@@ -1227,7 +1232,7 @@ function App() {
     setWorkflowPreview(run.previewItems ?? [])
     setSelectedWorkflowPreviewId(run.previewItems?.[0]?.id ?? '')
     setWorkflowSourceStatus(run.sourceStatus ?? '')
-    setContactResearchContext(run.researchContext ?? { searchLeads: null, searchedPages: [] })
+    setContactResearchContext(run.researchContext ?? { searchLeads: null, searchedPages: [], websiteStatus: null })
   }
 
   function saveApprovedPreview() {
@@ -2459,6 +2464,7 @@ function App() {
                   isSaving={actionStatus === 'Saving approved contacts...'}
                   searchLeads={contactResearchContext.searchLeads}
                   searchedPages={contactResearchContext.searchedPages}
+                  websiteStatus={contactResearchContext.websiteStatus}
                 />
               ) : null}
 

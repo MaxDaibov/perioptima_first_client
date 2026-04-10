@@ -491,8 +491,22 @@ export default async function handler(request, response) {
   }
 
   const clinic = request.body?.clinic
-  if (!clinic?.website) {
-    response.status(400).json({ error: 'clinic.website is required' })
+  if (!clinic?.name) {
+    response.status(400).json({ error: 'clinic.name is required' })
+    return
+  }
+
+  if (!clinic.website) {
+    response.status(200).json({
+      candidates: [],
+      searchedPages: [],
+      searchLeads: buildContactSearchLeads(clinic),
+      sourceStatus: 'search_only',
+      websiteStatus: {
+        status: 'missing',
+        message: 'No clinic website is available, so targeted search links were generated instead.',
+      },
+    })
     return
   }
 
@@ -565,9 +579,24 @@ export default async function handler(request, response) {
       sourceStatus: 'website',
     })
   } catch (error) {
-    response.status(500).json({
-      error: 'Website contact research failed',
-      detail: error instanceof Error ? error.message : 'Unknown error',
+    response.status(200).json({
+      candidates: [],
+      searchedPages: [
+        {
+          url: clinic.website,
+          label: 'clinic website',
+          failed: true,
+          reason: error instanceof Error ? error.message : 'Unknown error',
+        },
+      ],
+      searchLeads: buildContactSearchLeads(clinic),
+      sourceStatus: 'search_fallback',
+      websiteStatus: {
+        status: 'failed',
+        message:
+          'The clinic website could not be searched automatically, so targeted search links were generated instead.',
+        detail: error instanceof Error ? error.message : 'Unknown error',
+      },
     })
   }
 }

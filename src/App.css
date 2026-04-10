@@ -685,6 +685,27 @@
   margin: 12px 0;
 }
 
+.workflow-source-note {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #eef4f5;
+  border: 1px solid rgba(23, 49, 59, 0.08);
+}
+
+.workflow-source-note.warning {
+  background: #fbefd8;
+  border-color: rgba(211, 109, 60, 0.2);
+}
+
+.workflow-source-note p {
+  margin: 0;
+}
+
+.workflow-source-note p + p {
+  margin-top: 5px;
+}
+
 .search-lead-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
