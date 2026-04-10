@@ -89,6 +89,15 @@
   transform: translateY(-1px);
 }
 
+.ghost-button:disabled,
+.primary-button:disabled,
+.tab-button:disabled,
+.file-button:has(input:disabled) {
+  cursor: wait;
+  opacity: 0.68;
+  transform: none;
+}
+
 .nav-item.active {
   background: #17313b;
   color: #f9f2e8;
@@ -421,6 +430,33 @@
   color: #fff9f3;
   border-color: #d36d3c;
   box-shadow: 0 14px 24px rgba(211, 109, 60, 0.22);
+}
+
+.action-status {
+  background: #17313b;
+  color: #fff9f1;
+  gap: 8px;
+}
+
+.spinner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+  animation: pulse-dot 900ms ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
 }
 
 .tab-button.active {

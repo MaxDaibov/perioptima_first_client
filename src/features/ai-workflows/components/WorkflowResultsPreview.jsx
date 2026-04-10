@@ -23,6 +23,7 @@ export function WorkflowResultsPreview({
   onApprove,
   onReject,
   onChangeField,
+  isSaving = false,
 }) {
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0]
 
@@ -41,11 +42,11 @@ export function WorkflowResultsPreview({
           )}
         </div>
         <div className="inline-actions wrap">
-          <button className="ghost-button" onClick={onApproveSelected}>
+          <button className="ghost-button" onClick={onApproveSelected} disabled={isSaving}>
             Approve selected
           </button>
-          <button className="primary-button" onClick={onSaveApproved}>
-            Save approved
+          <button className="primary-button" onClick={onSaveApproved} disabled={isSaving}>
+            {isSaving ? 'Saving approved...' : 'Save approved'}
           </button>
         </div>
       </div>

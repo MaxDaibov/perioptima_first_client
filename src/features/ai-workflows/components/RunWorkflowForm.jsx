@@ -1,6 +1,6 @@
 import { WORKFLOW_TYPE_OPTIONS, WORKFLOW_TYPES } from '../../../ai/types'
 
-export function RunWorkflowForm({ value, sources = [], clinics = [], onChange, onRun }) {
+export function RunWorkflowForm({ value, sources = [], clinics = [], onChange, onRun, isRunning = false }) {
   const isFindClinics = value.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION
   const isFindContacts = value.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
   const enabledSources = sources.filter((source) => source.enabled)
@@ -119,8 +119,8 @@ export function RunWorkflowForm({ value, sources = [], clinics = [], onChange, o
               : 'Workflow placeholder. Preview-first behavior still applies.'}
         </p>
       </div>
-      <button className="primary-button" onClick={onRun}>
-        Run workflow
+      <button className="primary-button" onClick={onRun} disabled={isRunning}>
+        {isRunning ? 'Running workflow...' : 'Run workflow'}
       </button>
     </div>
   )

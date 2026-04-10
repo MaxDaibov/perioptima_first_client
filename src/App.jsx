@@ -700,10 +700,12 @@ function App() {
   const [editor, setEditor] = useState(null)
   const [clinicImport, setClinicImport] = useState(null)
   const [toast, setToast] = useState('')
+  const [actionStatus, setActionStatus] = useState('')
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState('loading')
   const [workspaceLastSavedAt, setWorkspaceLastSavedAt] = useState('')
   const persistenceEnabledRef = useRef(false)
   const saveTimerRef = useRef(null)
+  const actionTimerRef = useRef(null)
 
   const selectedClinic = clinics.find((clinic) => clinic.id === selectedClinicId) ?? clinics[0]
   const selectedDocument = documents.find((document) => document.id === selectedDocumentId) ?? documents[0]
@@ -899,6 +901,19 @@ function App() {
     toastTimer = window.setTimeout(() => setToast(''), 2500)
   }
 
+  function startActionStatus(message) {
+    window.clearTimeout(actionTimerRef.current)
+    setActionStatus(message)
+  }
+
+  function finishActionStatus(message = '') {
+    window.clearTimeout(actionTimerRef.current)
+    if (message) {
+      setActionStatus(message)
+    }
+    actionTimerRef.current = window.setTimeout(() => setActionStatus(''), message ? 1200 : 450)
+  }
+
   function updateWorkflowForm(field, value) {
     setWorkflowForm((current) => ({ ...current, [field]: value }))
   }
@@ -916,6 +931,7 @@ function App() {
     event.target.value = ''
     if (!file) return
 
+    startActionStatus('Reading import file...')
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
       const sheetName = workbook.SheetNames[0]
@@ -945,8 +961,10 @@ function App() {
         fileName: file.name,
         rows: parsedRows,
       })
+      finishActionStatus('Import preview ready')
       notify(`${parsedRows.length} clinic rows ready to review`)
     } catch {
+      finishActionStatus()
       notify('Could not read this file. Try CSV, XLS, or XLSX.')
     }
   }
@@ -998,6 +1016,7 @@ function App() {
       return
     }
 
+    startActionStatus('Saving imported clinics...')
     const createdClinics = rowsToCreate.map((row) => ({
       ...row.clinic,
       id: createLocalId('clinic'),
@@ -1032,6 +1051,7 @@ function App() {
 
     setClinicImport(null)
     setActiveView('Clinics')
+    finishActionStatus('Import saved')
     notify(`Imported ${createdClinics.length} new, updated ${rowsToUpdate.length}`)
   }
 
@@ -1065,89 +1085,94 @@ function App() {
   }
 
   async function runWorkflow() {
-    let preview = []
-    let sourceStatus = 'live'
+    startActionStatus('Running workflow...')
+    try {
+      let preview = []
+      let sourceStatus = 'live'
 
-    if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION) {
-      try {
-        preview = await findClinicsByRegionLive({
-          ...workflowForm,
-          sources: sources.filter((source) => source.enabled),
-        })
-      } catch {
-        sourceStatus = 'fallback'
-      }
-
-      if (!preview.length) {
-        preview = findClinicsByRegionMock(workflowForm)
-        sourceStatus = 'fallback'
-      }
-    } else if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
-      const clinic = clinics.find((item) => item.id === workflowForm.targetClinicId)
-      if (!clinic) {
-        notify('Select a target clinic first')
-        return
-      }
-      try {
-        const response = await fetch('/api/contact-research', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clinic, limit: workflowForm.resultLimit }),
-        })
-
-        if (!response.ok) {
-          throw new Error('Contact research request failed')
+      if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CLINICS_BY_REGION) {
+        try {
+          preview = await findClinicsByRegionLive({
+            ...workflowForm,
+            sources: sources.filter((source) => source.enabled),
+          })
+        } catch {
+          sourceStatus = 'fallback'
         }
 
-        const payload = await response.json()
-        preview = payload.candidates ?? []
-        sourceStatus = payload.sourceStatus ?? 'website'
-      } catch {
-        notify('Website contact research failed for this clinic')
+        if (!preview.length) {
+          preview = findClinicsByRegionMock(workflowForm)
+          sourceStatus = 'fallback'
+        }
+      } else if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
+        const clinic = clinics.find((item) => item.id === workflowForm.targetClinicId)
+        if (!clinic) {
+          notify('Select a target clinic first')
+          return
+        }
+        try {
+          const response = await fetch('/api/contact-research', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ clinic, limit: workflowForm.resultLimit }),
+          })
+
+          if (!response.ok) {
+            throw new Error('Contact research request failed')
+          }
+
+          const payload = await response.json()
+          preview = payload.candidates ?? []
+          sourceStatus = payload.sourceStatus ?? 'website'
+        } catch {
+          notify('Website contact research failed for this clinic')
+          return
+        }
+      } else {
+        notify('This workflow type is not implemented yet')
         return
       }
-    } else {
-      notify('This workflow type is not implemented yet')
-      return
-    }
 
-    const runId = `run-${Date.now()}`
-    const run = {
-      id: runId,
-      workflowType: workflowForm.workflowType,
-      input: { ...workflowForm },
-      output:
-        workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
-          ? `${preview.length} contact candidates`
-          : `${preview.length} clinic candidates`,
-      status: 'preview_ready',
-      created_at: new Date().toISOString(),
-      generated_items: preview.length,
-      approved_items: 0,
-      saved_items: 0,
-      previewItems: preview,
-      sourceStatus,
-    }
+      const runId = `run-${Date.now()}`
+      const run = {
+        id: runId,
+        workflowType: workflowForm.workflowType,
+        input: { ...workflowForm },
+        output:
+          workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
+            ? `${preview.length} contact candidates`
+            : `${preview.length} clinic candidates`,
+        status: 'preview_ready',
+        created_at: new Date().toISOString(),
+        generated_items: preview.length,
+        approved_items: 0,
+        saved_items: 0,
+        previewItems: preview,
+        sourceStatus,
+      }
 
-    setActiveWorkflowRunId(runId)
-    setWorkflowPreview(preview)
-    setSelectedWorkflowPreviewId(preview[0]?.id ?? '')
-    setWorkflowSourceStatus(sourceStatus)
-    setWorkflowHistory((current) => [run, ...current])
+      setActiveWorkflowRunId(runId)
+      setWorkflowPreview(preview)
+      setSelectedWorkflowPreviewId(preview[0]?.id ?? '')
+      setWorkflowSourceStatus(sourceStatus)
+      setWorkflowHistory((current) => [run, ...current])
 
-    if (!preview.length) {
-      notify(
-        workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
-          ? 'No extractable website contacts found for this clinic yet'
-          : 'No clinics found for these filters',
-      )
-      return
-    }
+      if (!preview.length) {
+        notify(
+          workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS
+            ? 'No extractable website contacts found for this clinic yet'
+            : 'No clinics found for these filters',
+        )
+        return
+      }
 
-    if (sourceStatus === 'live') {
-      notify('Workflow preview generated from live CMS search')
-    } else if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
-      notify('Website-sourced contact candidates generated')
+      if (sourceStatus === 'live') {
+        notify('Workflow preview generated from live CMS search')
+      } else if (workflowForm.workflowType === WORKFLOW_TYPES.FIND_CONTACTS) {
+        notify('Website-sourced contact candidates generated')
+      }
+    } finally {
+      finishActionStatus()
     }
   }
 
@@ -1203,8 +1228,12 @@ function App() {
     }
 
     const approved = workflowPreview.filter((item) => item.approved && !item.rejected)
-    if (!approved.length) return
+    if (!approved.length) {
+      notify('Approve at least one item first')
+      return
+    }
 
+    startActionStatus('Saving approved clinics...')
     const newClinics = approved.map((item, index) => mapWorkflowClinicToClinicEntity(item, index))
     setClinics((current) => [...newClinics, ...current])
     setSelectedClinicId(newClinics[0].id)
@@ -1226,13 +1255,18 @@ function App() {
       saved_items: approved.length,
       output: `${approved.length} clinics saved to CRM`,
     })
+    finishActionStatus('Approved clinics saved')
     notify('Approved items saved')
   }
 
   function saveApprovedContacts() {
     const approved = workflowPreview.filter((item) => item.approved && !item.rejected)
-    if (!approved.length) return
+    if (!approved.length) {
+      notify('Approve at least one contact first')
+      return
+    }
 
+    startActionStatus('Saving approved contacts...')
     const newContacts = approved.map((item, index) => mapWorkflowContactToContactEntity(item, index))
     setContacts((current) => {
       const existingKeys = new Set(
@@ -1252,6 +1286,7 @@ function App() {
       saved_items: approved.length,
       output: `${approved.length} contacts saved to CRM`,
     })
+    finishActionStatus('Approved contacts saved')
     notify('Approved contacts saved')
   }
 
@@ -1324,38 +1359,46 @@ function App() {
   function saveEditor() {
     if (!editor) return
 
+    startActionStatus(`Saving ${editor.entity}...`)
     if (editor.entity === 'clinic') {
       saveClinicEditor(editor.values, editor.mode)
+      finishActionStatus()
       return
     }
 
     if (editor.entity === 'task') {
       saveTaskEditor(editor.values, editor.mode)
+      finishActionStatus()
       return
     }
 
     if (editor.entity === 'contact') {
       saveContactEditor(editor.values, editor.mode)
+      finishActionStatus()
       return
     }
 
     if (editor.entity === 'interaction') {
       saveInteractionEditor(editor.values, editor.mode)
+      finishActionStatus()
       return
     }
 
     if (editor.entity === 'asset') {
       saveAssetEditor(editor.values, editor.mode)
+      finishActionStatus()
       return
     }
 
     if (editor.entity === 'document') {
       saveDocumentEditor(editor.values, editor.mode)
+      finishActionStatus()
       return
     }
 
     if (editor.entity === 'source') {
       saveSourceEditor(editor.values, editor.mode)
+      finishActionStatus()
     }
   }
 
@@ -1685,6 +1728,12 @@ function App() {
             <h2>{activeView}</h2>
           </div>
           <div className="inline-actions wrap">
+            {actionStatus ? (
+              <span className="status-pill action-status">
+                <span className="spinner-dot" />
+                {actionStatus}
+              </span>
+            ) : null}
             <span className={`status-pill ${getWorkspaceSyncClass(workspaceSyncStatus)}`}>
               {formatWorkspaceSyncLabel(workspaceSyncStatus)}
             </span>
@@ -1705,10 +1754,11 @@ function App() {
                 </div>
                 <div className="inline-actions wrap">
                   <label className="ghost-button file-button">
-                    Import CSV/Excel
+                    {actionStatus === 'Reading import file...' ? 'Reading file...' : 'Import CSV/Excel'}
                     <input
                       type="file"
                       accept=".csv,.xls,.xlsx"
+                      disabled={Boolean(actionStatus)}
                       onChange={handleClinicImportFile}
                     />
                   </label>
@@ -2365,6 +2415,7 @@ function App() {
                 clinics={clinics}
                 onChange={updateWorkflowForm}
                 onRun={runWorkflow}
+                isRunning={actionStatus === 'Running workflow...'}
               />
             </div>
 
@@ -2381,6 +2432,7 @@ function App() {
                   onApprove={approvePreviewItem}
                   onReject={rejectPreviewItem}
                   onChangeField={updatePreviewItemField}
+                  isSaving={actionStatus === 'Saving approved clinics...'}
                 />
               ) : null}
 
@@ -2395,6 +2447,7 @@ function App() {
                   onApprove={approvePreviewItem}
                   onReject={rejectPreviewItem}
                   onChangeField={updatePreviewItemField}
+                  isSaving={actionStatus === 'Saving approved contacts...'}
                 />
               ) : null}
 
@@ -2415,6 +2468,7 @@ function App() {
           onChangeField={updateEditorField}
           onClose={closeEditor}
           onSave={saveEditor}
+          isSaving={actionStatus.startsWith('Saving ') && actionStatus.endsWith('...')}
         />
       ) : null}
 
@@ -2425,6 +2479,7 @@ function App() {
           onChangeRow={updateClinicImportRow}
           onBulkDuplicateAction={applyClinicImportAction}
           onSave={saveClinicImport}
+          isSaving={actionStatus === 'Saving imported clinics...'}
         />
       ) : null}
 
@@ -2480,6 +2535,7 @@ function ClinicImportModal({
   onChangeRow,
   onBulkDuplicateAction,
   onSave,
+  isSaving = false,
 }) {
   const newCount = clinicImport.rows.filter((row) => !row.duplicateId).length
   const duplicateCount = clinicImport.rows.filter((row) => row.duplicateId).length
@@ -2584,11 +2640,11 @@ function ClinicImportModal({
         </div>
 
         <div className="modal-actions">
-          <button className="ghost-button" onClick={onClose}>
+          <button className="ghost-button" onClick={onClose} disabled={isSaving}>
             Cancel
           </button>
-          <button className="primary-button" onClick={onSave}>
-            Save {saveCount} rows
+          <button className="primary-button" onClick={onSave} disabled={isSaving}>
+            {isSaving ? 'Saving import...' : `Save ${saveCount} rows`}
           </button>
         </div>
       </div>
@@ -2596,7 +2652,7 @@ function ClinicImportModal({
   )
 }
 
-function EditorModal({ editor, clinics, onChangeField, onClose, onSave }) {
+function EditorModal({ editor, clinics, onChangeField, onClose, onSave, isSaving = false }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-card" onClick={(event) => event.stopPropagation()}>
@@ -2605,7 +2661,7 @@ function EditorModal({ editor, clinics, onChangeField, onClose, onSave }) {
             <p className="eyebrow">CRM editor</p>
             <h3>{editor.mode === 'edit' ? `Edit ${editor.entity}` : `Add ${editor.entity}`}</h3>
           </div>
-          <button className="ghost-button small" onClick={onClose}>
+          <button className="ghost-button small" onClick={onClose} disabled={isSaving}>
             Close
           </button>
         </div>
@@ -2639,11 +2695,11 @@ function EditorModal({ editor, clinics, onChangeField, onClose, onSave }) {
         ) : null}
 
         <div className="modal-actions">
-          <button className="ghost-button" onClick={onClose}>
+          <button className="ghost-button" onClick={onClose} disabled={isSaving}>
             Cancel
           </button>
-          <button className="primary-button" onClick={onSave}>
-            Save
+          <button className="primary-button" onClick={onSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>

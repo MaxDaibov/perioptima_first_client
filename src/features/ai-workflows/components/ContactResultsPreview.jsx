@@ -19,6 +19,7 @@ export function ContactResultsPreview({
   onApprove,
   onReject,
   onChangeField,
+  isSaving = false,
 }) {
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? items[0]
 
@@ -31,11 +32,11 @@ export function ContactResultsPreview({
           <p className="muted">These are website-sourced contact candidates extracted from leadership, provider, team, directory, and contact pages on the clinic website.</p>
         </div>
         <div className="inline-actions wrap">
-          <button className="ghost-button" onClick={onApproveSelected}>
+          <button className="ghost-button" onClick={onApproveSelected} disabled={isSaving}>
             Approve selected
           </button>
-          <button className="primary-button" onClick={onSaveApproved}>
-            Save approved
+          <button className="primary-button" onClick={onSaveApproved} disabled={isSaving}>
+            {isSaving ? 'Saving approved...' : 'Save approved'}
           </button>
         </div>
       </div>
