@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { findClinicsByRegion as findClinicsByRegionMock } from './ai/services/mockClinicFinder'
 import { findClinicsByRegionLive } from './ai/services/realClinicFinder'
 import { INITIAL_FIND_CLINICS_FORM, WORKFLOW_TYPES } from './ai/types'
@@ -671,6 +672,12 @@ const INITIAL_TASK_FILTERS = {
   sortBy: 'due_asc',
 }
 
+const CLINIC_IMPORT_ACTIONS = {
+  CREATE: 'create',
+  UPDATE: 'update',
+  SKIP: 'skip',
+}
+
 function App() {
   const [activeView, setActiveView] = useState('Clinics')
   const [clinics, setClinics] = useState(seedClinics)
@@ -691,6 +698,7 @@ function App() {
   const [selectedClinicId, setSelectedClinicId] = useState(seedClinics[0].id)
   const [selectedDocumentId, setSelectedDocumentId] = useState(seedDocuments[0].id)
   const [editor, setEditor] = useState(null)
+  const [clinicImport, setClinicImport] = useState(null)
   const [toast, setToast] = useState('')
   const [workspaceSyncStatus, setWorkspaceSyncStatus] = useState('loading')
   const [workspaceLastSavedAt, setWorkspaceLastSavedAt] = useState('')
@@ -901,6 +909,130 @@ function App() {
 
   function updateTaskFilter(field, value) {
     setTaskFilters((current) => ({ ...current, [field]: value }))
+  }
+
+  async function handleClinicImportFile(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[sheetName]
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      const parsedRows = []
+      const duplicateContext = [...clinics]
+      const existingClinicIds = new Set(clinics.map((clinic) => clinic.id))
+      for (const [index, row] of rows.entries()) {
+        const parsedRow = buildClinicImportRow(row, index, duplicateContext)
+        if (!parsedRow.clinic.name) continue
+        parsedRow.canUpdateDuplicate = parsedRow.duplicateId
+          ? existingClinicIds.has(parsedRow.duplicateId)
+          : false
+        parsedRows.push(parsedRow)
+        if (!parsedRow.duplicateId) {
+          duplicateContext.push({ ...parsedRow.clinic, id: parsedRow.id })
+        }
+      }
+
+      if (!parsedRows.length) {
+        notify('No clinic rows found in this file')
+        return
+      }
+
+      setClinicImport({
+        fileName: file.name,
+        rows: parsedRows,
+      })
+      notify(`${parsedRows.length} clinic rows ready to review`)
+    } catch {
+      notify('Could not read this file. Try CSV, XLS, or XLSX.')
+    }
+  }
+
+  function updateClinicImportRow(rowId, changes) {
+    setClinicImport((current) =>
+      current
+        ? {
+            ...current,
+            rows: current.rows.map((row) => (row.id === rowId ? { ...row, ...changes } : row)),
+          }
+        : current,
+    )
+  }
+
+  function applyClinicImportAction(action) {
+    setClinicImport((current) =>
+      current
+        ? {
+            ...current,
+            rows: current.rows.map((row) =>
+              row.duplicateId
+                ? {
+                    ...row,
+                    action:
+                      action === CLINIC_IMPORT_ACTIONS.UPDATE && !row.canUpdateDuplicate
+                        ? CLINIC_IMPORT_ACTIONS.SKIP
+                        : action,
+                  }
+                : row,
+            ),
+          }
+        : current,
+    )
+  }
+
+  function saveClinicImport() {
+    if (!clinicImport) return
+
+    const now = new Date().toISOString()
+    const activeRows = clinicImport.rows.filter((row) => row.action !== CLINIC_IMPORT_ACTIONS.SKIP)
+    const rowsToCreate = activeRows.filter((row) => !row.duplicateId)
+    const rowsToUpdate = activeRows.filter(
+      (row) => row.duplicateId && row.canUpdateDuplicate && row.action === CLINIC_IMPORT_ACTIONS.UPDATE,
+    )
+
+    if (!activeRows.length) {
+      notify('No clinic rows selected to import')
+      return
+    }
+
+    const createdClinics = rowsToCreate.map((row) => ({
+      ...row.clinic,
+      id: createLocalId('clinic'),
+      created_at: now,
+      updated_at: now,
+      last_activity_at: now,
+    }))
+
+    setClinics((current) => {
+      const updated = current.map((clinic) => {
+        const replacement = rowsToUpdate.find((row) => row.duplicateId === clinic.id)
+        if (!replacement) return clinic
+
+        return {
+          ...clinic,
+          ...replacement.clinic,
+          id: clinic.id,
+          created_at: clinic.created_at,
+          updated_at: now,
+          last_activity_at: now,
+        }
+      })
+
+      return [...createdClinics, ...updated]
+    })
+
+    if (createdClinics[0]) {
+      setSelectedClinicId(createdClinics[0].id)
+    } else if (rowsToUpdate[0]?.duplicateId) {
+      setSelectedClinicId(rowsToUpdate[0].duplicateId)
+    }
+
+    setClinicImport(null)
+    setActiveView('Clinics')
+    notify(`Imported ${createdClinics.length} new, updated ${rowsToUpdate.length}`)
   }
 
   function syncWorkflowRun(runId, previewItems, overrides = {}) {
@@ -1571,9 +1703,19 @@ function App() {
                   <h3>Clinics</h3>
                   <p className="muted">Fit is heuristic and explained in Docs under <strong>Fit scoring rubric</strong>.</p>
                 </div>
-                <button className="primary-button" onClick={() => openClinicEditor('create')}>
-                  Add clinic
-                </button>
+                <div className="inline-actions wrap">
+                  <label className="ghost-button file-button">
+                    Import CSV/Excel
+                    <input
+                      type="file"
+                      accept=".csv,.xls,.xlsx"
+                      onChange={handleClinicImportFile}
+                    />
+                  </label>
+                  <button className="primary-button" onClick={() => openClinicEditor('create')}>
+                    Add clinic
+                  </button>
+                </div>
               </div>
               <div className="clinic-filters">
                 <label>
@@ -2276,6 +2418,16 @@ function App() {
         />
       ) : null}
 
+      {clinicImport ? (
+        <ClinicImportModal
+          clinicImport={clinicImport}
+          onClose={() => setClinicImport(null)}
+          onChangeRow={updateClinicImportRow}
+          onBulkDuplicateAction={applyClinicImportAction}
+          onSave={saveClinicImport}
+        />
+      ) : null}
+
       {toast && <div className="toast">{toast}</div>}
     </div>
   )
@@ -2318,6 +2470,128 @@ function EmptyState({ title, body }) {
       <p className="eyebrow">Ready for input</p>
       <h4>{title}</h4>
       <p>{body}</p>
+    </div>
+  )
+}
+
+function ClinicImportModal({
+  clinicImport,
+  onClose,
+  onChangeRow,
+  onBulkDuplicateAction,
+  onSave,
+}) {
+  const newCount = clinicImport.rows.filter((row) => !row.duplicateId).length
+  const duplicateCount = clinicImport.rows.filter((row) => row.duplicateId).length
+  const saveCount = clinicImport.rows.filter((row) => row.action !== CLINIC_IMPORT_ACTIONS.SKIP).length
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-card wide-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="panel-header">
+          <div>
+            <p className="eyebrow">Clinic import</p>
+            <h3>Review CSV / Excel upload</h3>
+            <p className="muted">
+              {clinicImport.fileName} • {newCount} new • {duplicateCount} possible duplicates
+            </p>
+          </div>
+          <button className="ghost-button small" onClick={onClose}>
+            Close
+          </button>
+        </div>
+
+        {duplicateCount ? (
+          <div className="import-toolbar">
+            <p className="muted">
+              Duplicate rows are skipped by default. Choose update only when you want the file to overwrite existing CRM fields.
+            </p>
+            <div className="inline-actions wrap">
+              <button
+                className="ghost-button small"
+                onClick={() => onBulkDuplicateAction(CLINIC_IMPORT_ACTIONS.SKIP)}
+              >
+                Skip all duplicates
+              </button>
+              <button
+                className="ghost-button small"
+                onClick={() => onBulkDuplicateAction(CLINIC_IMPORT_ACTIONS.UPDATE)}
+              >
+                Update all duplicates
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="import-table-wrap">
+          <table className="data-table import-table">
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Clinic</th>
+                <th>Location</th>
+                <th>Type / specialty</th>
+                <th>Tier / fit</th>
+                <th>Duplicate check</th>
+              </tr>
+            </thead>
+            <tbody>
+              {clinicImport.rows.map((row) => (
+                <tr key={row.id}>
+                  <td>
+                    <select
+                      className="text-input compact-select"
+                      value={row.action}
+                      onChange={(event) => onChangeRow(row.id, { action: event.target.value })}
+                    >
+                      {!row.duplicateId ? <option value={CLINIC_IMPORT_ACTIONS.CREATE}>Import new</option> : null}
+                      {row.duplicateId ? <option value={CLINIC_IMPORT_ACTIONS.SKIP}>Skip</option> : null}
+                      {row.canUpdateDuplicate ? (
+                        <option value={CLINIC_IMPORT_ACTIONS.UPDATE}>Update existing</option>
+                      ) : null}
+                    </select>
+                  </td>
+                  <td>
+                    <strong>{row.clinic.name}</strong>
+                    <p className="muted">{row.clinic.website || 'No website provided'}</p>
+                  </td>
+                  <td>
+                    <p>{[row.clinic.city, row.clinic.state].filter(Boolean).join(', ') || 'Unknown'}</p>
+                  </td>
+                  <td>
+                    <p>{row.clinic.type || 'Unknown type'}</p>
+                    <p className="muted">{row.clinic.specialty_focus}</p>
+                  </td>
+                  <td>
+                    <div className="inline-actions wrap">
+                      {row.clinic.priority_tier ? <span className="chip">Tier {row.clinic.priority_tier}</span> : null}
+                      <span className="chip accent">Fit {row.clinic.strategic_fit_score}</span>
+                    </div>
+                  </td>
+                  <td>
+                    {row.duplicateId ? (
+                      <span className="status-pill priority-medium">
+                        {row.canUpdateDuplicate ? `Matches ${row.duplicateName}` : 'Duplicate in file'}
+                      </span>
+                    ) : (
+                      <span className="status-pill stage-ready_for_outreach">New</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="modal-actions">
+          <button className="ghost-button" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="primary-button" onClick={onSave}>
+            Save {saveCount} rows
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -2931,6 +3205,163 @@ function createSeedTimestamp(index, day) {
 
 function createLocalId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+function buildClinicImportRow(rawRow, index, currentClinics) {
+  const name = getImportedValue(rawRow, ['name', 'clinic name', 'health system', 'organization', 'system'])
+  const website = normalizeWebsite(
+    getImportedValue(rawRow, ['website', 'websites', 'web site', 'url', 'site']),
+  )
+  const geography = getImportedValue(rawRow, ['geography', 'location', 'market', 'region'])
+  const parsedGeography = parseImportedGeography(geography)
+  const tier = normalizeImportedTier(getImportedValue(rawRow, ['tier', 'priority tier', 'priority']))
+  const notes = getImportedValue(rawRow, ['notes', 'notes for perioptima', 'notes for perioptima ', 'description'])
+  const epicEhr = getImportedValue(rawRow, ['epic ehr', 'ehr', 'epic'])
+  const valueBased = getImportedValue(rawRow, ['value-based ori', 'value-based orientation', 'value based', 'value-based'])
+  const type = getImportedValue(rawRow, ['type', 'clinic type', 'organization type'])
+  const specialty = getImportedValue(rawRow, ['specialty', 'specialty focus', 'service line', 'focus'])
+  const fitScore = Number(getImportedValue(rawRow, ['strategic fit score', 'fit score', 'fit'])) || inferFitFromImport(tier, valueBased, type)
+  const duplicate = findDuplicateClinic(
+    { name, website },
+    currentClinics,
+  )
+
+  return {
+    id: `clinic-import-preview-${index + 1}`,
+    duplicateId: duplicate?.id ?? '',
+    duplicateName: duplicate?.name ?? '',
+    canUpdateDuplicate: false,
+    action: duplicate ? CLINIC_IMPORT_ACTIONS.SKIP : CLINIC_IMPORT_ACTIONS.CREATE,
+    clinic: {
+      name: name.trim(),
+      website,
+      city: getImportedValue(rawRow, ['city']) || parsedGeography.city,
+      state: normalizeState(getImportedValue(rawRow, ['state']) || parsedGeography.state),
+      type: type || 'Health System',
+      specialty_focus: specialty || 'Surgical programs, perioperative workflows',
+      size_estimate: getImportedValue(rawRow, ['size estimate', 'members / scale', 'members/scale', 'scale', 'members']) || 'Unknown',
+      has_rpm_signals: parseBoolean(getImportedValue(rawRow, ['has_rpm_signals', 'rpm', 'remote monitoring']), true),
+      has_nurse_navigator_program: parseBoolean(
+        getImportedValue(rawRow, ['has_nurse_navigator_program', 'nurse navigator', 'navigation']),
+        false,
+      ),
+      strategic_fit_score: Math.min(10, Math.max(0, fitScore)),
+      stage: 'researching',
+      priority_tier: tier,
+      pain_hypothesis:
+        getImportedValue(rawRow, ['pain hypothesis', 'pain_hypothesis']) ||
+        'Likely perioperative coordination and post-discharge visibility gaps across complex surgical workflows.',
+      why_us:
+        getImportedValue(rawRow, ['why us', 'why_us']) ||
+        'PeriOptima can support structured monitoring, escalation, and recovery workflow continuity.',
+      notes: buildImportedClinicNotes({ notes, geography, epicEhr, valueBased }),
+    },
+  }
+}
+
+function getImportedValue(row, aliases) {
+  const normalizedAliases = aliases.map(normalizeImportHeader)
+  const entry = Object.entries(row).find(([key]) => normalizedAliases.includes(normalizeImportHeader(key)))
+  return entry ? String(entry[1] ?? '').trim() : ''
+}
+
+function normalizeImportHeader(value) {
+  return String(value)
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizeWebsite(value) {
+  const firstUrl = String(value)
+    .split(/\s+/)
+    .find((part) => /^https?:\/\//i.test(part) || /^www\./i.test(part))
+  if (!firstUrl) return ''
+  return firstUrl.startsWith('http') ? firstUrl : `https://${firstUrl}`
+}
+
+function parseImportedGeography(value) {
+  const geography = String(value ?? '').trim()
+  const stateMatch = geography.match(/\b[A-Z]{2}\b/)
+  const cityMatch = geography.match(/^([^,/()]+),\s*([A-Z]{2})\b/)
+
+  return {
+    city: cityMatch?.[1]?.trim() ?? '',
+    state: stateMatch?.[0] ?? '',
+  }
+}
+
+function normalizeState(value) {
+  const match = String(value ?? '').toUpperCase().match(/\b[A-Z]{2}\b/)
+  return match?.[0] ?? String(value ?? '').trim()
+}
+
+function normalizeImportedTier(value) {
+  const tier = String(value ?? '').trim().toUpperCase()
+  if (tier === '1') return 'A'
+  if (tier === '2') return 'B'
+  if (tier === '3') return 'C'
+  if (['A', 'B', 'C'].includes(tier)) return tier
+  return ''
+}
+
+function inferFitFromImport(tier, valueBased, type) {
+  let score = tier === 'A' ? 10 : tier === 'B' ? 8 : tier === 'C' ? 7 : 7
+  if (/very high/i.test(valueBased)) score += 1
+  if (/academic|integrated|health system|hospital/i.test(type)) score += 1
+  return Math.min(10, score)
+}
+
+function parseBoolean(value, fallback) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized) return fallback
+  if (['yes', 'true', '1', 'y'].includes(normalized)) return true
+  if (['no', 'false', '0', 'n'].includes(normalized)) return false
+  return fallback
+}
+
+function buildImportedClinicNotes({ notes, geography, epicEhr, valueBased }) {
+  return [
+    notes,
+    geography ? `Imported geography: ${geography}` : '',
+    epicEhr ? `Epic EHR: ${epicEhr}` : '',
+    valueBased ? `Value-based orientation: ${valueBased}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function findDuplicateClinic(importedClinic, clinics) {
+  const importedName = normalizeDuplicateKey(importedClinic.name)
+  const importedDomain = normalizeWebsiteDomain(importedClinic.website)
+
+  return clinics.find((clinic) => {
+    const clinicName = normalizeDuplicateKey(clinic.name)
+    const clinicDomain = normalizeWebsiteDomain(clinic.website)
+
+    if (importedName && clinicName === importedName) return true
+    if (importedDomain && clinicDomain && clinicDomain === importedDomain) return true
+    return false
+  })
+}
+
+function normalizeDuplicateKey(value) {
+  return String(value ?? '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\b(inc|llc|the)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function normalizeWebsiteDomain(value) {
+  try {
+    return new URL(normalizeWebsite(value)).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
 }
 
 function normalizeTags(value) {

@@ -428,7 +428,6 @@ export default async function handler(request, response) {
         }
 
         const pageUrl = pageResult.finalUrl
-        const pageHaystack = `${page.label} ${pageUrl}`.toLowerCase()
         if (!isLikelyContactPage(pageUrl, page.label)) {
           searchedPages.push({ ...page, skipped: true, reason: 'low-signal page' })
           continue
